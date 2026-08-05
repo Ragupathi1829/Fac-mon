@@ -2,12 +2,35 @@ import React, { useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { dashboardApi } from '../services/api';
 
-const ICONS = {
-  activeMachines: '⚙️',
-  oee: '📊',
-  alerts: '🚨',
-  errors: '⚠️',
-};
+// SVG Icon components for a cleaner, premium look
+const GearIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+  </svg>
+);
+
+const ChartIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10" />
+    <line x1="12" y1="20" x2="12" y2="4" />
+    <line x1="6" y1="20" x2="6" y2="14" />
+  </svg>
+);
+
+const AlertIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </svg>
+);
+
+const ShieldIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
 
 const KpiPanel: React.FC = () => {
   const { state, dispatch } = useApp();
@@ -36,7 +59,9 @@ const KpiPanel: React.FC = () => {
     <div className="kpi-panel">
       {/* Active Machines */}
       <div className="kpi-card kpi-card-cyan">
-        <div className="kpi-card-icon">{ICONS.activeMachines}</div>
+        <div className="kpi-card-icon" style={{ color: '#00d4ff' }}>
+          <GearIcon />
+        </div>
         <div className="kpi-card-body">
           <h3>Active Machines</h3>
           {state.kpiLoading ? (
@@ -56,7 +81,9 @@ const KpiPanel: React.FC = () => {
 
       {/* OEE */}
       <div className="kpi-card kpi-card-emerald">
-        <div className="kpi-card-icon">{ICONS.oee}</div>
+        <div className="kpi-card-icon" style={{ color: '#00e68a' }}>
+          <ChartIcon />
+        </div>
         <div className="kpi-card-body">
           <h3>Overall OEE</h3>
           {state.kpiLoading ? (
@@ -75,7 +102,9 @@ const KpiPanel: React.FC = () => {
 
       {/* Active Alerts */}
       <div className={`kpi-card ${(kpi?.criticalAlerts ?? 0) > 0 ? 'kpi-card-rose' : 'kpi-card-amber'}`}>
-        <div className="kpi-card-icon">{ICONS.alerts}</div>
+        <div className="kpi-card-icon" style={{ color: (kpi?.criticalAlerts ?? 0) > 0 ? '#ff3b6a' : '#ffb020' }}>
+          <AlertIcon />
+        </div>
         <div className="kpi-card-body">
           <h3>Active Alerts</h3>
           {state.kpiLoading ? (
@@ -94,7 +123,9 @@ const KpiPanel: React.FC = () => {
 
       {/* Machine Errors */}
       <div className="kpi-card kpi-card-blue">
-        <div className="kpi-card-icon">{ICONS.errors}</div>
+        <div className="kpi-card-icon" style={{ color: '#3b82f6' }}>
+          <ShieldIcon />
+        </div>
         <div className="kpi-card-body">
           <h3>Machines in Error</h3>
           {state.kpiLoading ? (
