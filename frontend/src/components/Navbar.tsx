@@ -20,7 +20,7 @@ const Navbar: React.FC = () => {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hour12: true,
   });
 
   const dateStr = clock.toLocaleDateString([], {
@@ -74,13 +74,13 @@ const Navbar: React.FC = () => {
         </button>
         <button
           className={`nav-link ${isActive('/machines') ? 'active' : ''}`}
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/machines')}
         >
           ⚙️ Machines
         </button>
         <button
           className={`nav-link ${isActive('/alerts') ? 'active' : ''}`}
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/alerts')}
         >
           🚨 Alerts
           {activeAlerts > 0 && (
