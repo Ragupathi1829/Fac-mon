@@ -4,11 +4,13 @@ server:
 spring:
   application:
     name: factory-monitoring-backend
+  profiles:
+    active: local
 
   datasource:
-    url: jdbc:mysql://localhost:3306/factory_monitoring?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: root
-    password: Ragu@1829
+    url: ${DB_URL:jdbc:mysql://localhost:3306/factory_monitoring?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
