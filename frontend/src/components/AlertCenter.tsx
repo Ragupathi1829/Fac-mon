@@ -43,7 +43,7 @@ const AlertCenter: React.FC = () => {
 
   const formatTime = (ts: string) => {
     const d = new Date(ts);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
   };
 
   const activeAlerts = state.alerts.filter(a => !a.resolved);

@@ -51,7 +51,7 @@ const MachineDetailView: React.FC = () => {
   const chartData = liveHistory.length > 0 ? liveHistory : history;
 
   const chartFormatted = chartData.map(t => ({
-    time: new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    time: new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }),
     temperature: t.temperature,
     vibration:   t.vibration,
     pressure:    t.pressure,
@@ -200,7 +200,7 @@ const MachineDetailView: React.FC = () => {
                   <span style={{ color: alert.severity === 'CRITICAL' ? '#f43f5e' : alert.severity === 'WARNING' ? '#f59e0b' : '#06b6d4', fontWeight: 600, fontSize: '0.8rem' }}>
                     {alert.severity}
                   </span>
-                  <span className="alert-time">{new Date(alert.timestamp).toLocaleString()}</span>
+                  <span className="alert-time">{new Date(alert.timestamp).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
                   {alert.resolved && <span className="alert-resolved-tag">Resolved</span>}
                 </div>
                 <p className="alert-message">{alert.message}</p>
