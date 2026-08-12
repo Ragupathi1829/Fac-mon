@@ -1,6 +1,5 @@
 import React from 'react';
 import Navbar from '../components/Navbar';
-import ActivityTicker from '../components/ActivityTicker';
 import SustainabilityDashboard from '../views/SustainabilityDashboard';
 import { useApp } from '../context/AppContext';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -22,7 +21,6 @@ const SustainabilityView: React.FC = () => {
   return (
     <div className="app-root">
       <Navbar />
-      <ActivityTicker />
       <div className="dashboard-container">
         <header className="dashboard-header">
           <h1>♻️ Sustainability Dashboard</h1>

@@ -1,7 +1,25 @@
-import React, { createContext, useContext, useReducer, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
 import type { Machine, Alert, KpiData, TelemetryLog, WsMessage, UserRole, EnrichedTelemetryLog, Worker, InventoryItem, MaintenanceRecord, FactoryDoc } from '../types/machine';
 
 // ─── State Shape ─────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  id: number;
+  employeeId: string;
+  fullName: string;
+  email: string;
+  role: UserRole;
+  department: string;
+  designation: string;
+  shift: string;
+  factoryLocation: string;
+  profileImage?: string;
+  phone?: string;
+  alternateEmail?: string;
+  address?: string;
+  emergencyContact?: string;
+  timezone?: string;
+}
 
 interface AppState {
   machines: Machine[];
@@ -15,7 +33,10 @@ interface AppState {
   kpiLoading: boolean;
   
   // SmartFactory 360 Specific State
+  currentUser: UserProfile | null;
+  token: string | null;
   activeRole: UserRole;
+  profileActiveTab: 'personal' | 'employment' | 'factory' | 'security' | 'activity' | 'notifications' | 'settings';
   workers: Worker[];
   inventory: InventoryItem[];
   maintenance: MaintenanceRecord[];
@@ -52,27 +73,63 @@ const initialDocs: FactoryDoc[] = [
   { id: 4, title: 'Lockout-Tagout (LOTO) Compliance Guide', category: 'SAFETY', fileSize: '850 KB', uploadedDate: '2026-08-01' }
 ];
 
+import { DEFAULT_MACHINES, DEFAULT_ALERTS } from '../services/api';
+
+const STORAGE_KEY_USER = 'fac_mon_current_user';
+
+const getSavedUser = (): UserProfile | null => {
+  const saved = localStorage.getItem(STORAGE_KEY_USER);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.fullName) {
+        return parsed;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  return null;
+};
+
 const initialState: AppState = {
-  machines: [],
-  alerts: [],
-  kpi: null,
+  machines: DEFAULT_MACHINES as Machine[],
+  alerts: DEFAULT_ALERTS as Alert[],
+  kpi: {
+    totalMachines: 6,
+    runningMachines: 3,
+    idleMachines: 1,
+    stoppedMachines: 1,
+    errorMachines: 1,
+    oeePercent: 88.4,
+    activeAlerts: 2,
+    criticalAlerts: 1,
+    warningAlerts: 1,
+  },
   latestTelemetry: {},
   telemetryHistory: {},
-  isConnected: false,
-  machinesLoading: true,
-  alertsLoading: true,
-  kpiLoading: true,
-  activeRole: 'FACTORY_OWNER',
+  isConnected: true,
+  machinesLoading: false,
+  alertsLoading: false,
+  kpiLoading: false,
+  currentUser: getSavedUser(),
+  token: localStorage.getItem('fac_mon_token'),
+  activeRole: 'ADMIN',
+  profileActiveTab: 'personal',
   workers: initialWorkers,
   inventory: initialInventory,
   maintenance: initialMaintenance,
   documents: initialDocs,
-  auditLogs: ['System startup success', 'Database connection established', 'WebSocket client listening']
+  auditLogs: ['IoT telemetry sensor simulation active', 'Connected to 6 machine nodes', 'System nominal']
 };
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
 type Action =
+  | { type: 'SET_USER_SESSION'; payload: { token: string; user: UserProfile } }
+  | { type: 'UPDATE_USER_PROFILE'; payload: Partial<UserProfile> }
+  | { type: 'SET_PROFILE_TAB'; payload: 'personal' | 'employment' | 'factory' | 'security' | 'activity' | 'notifications' | 'settings' }
+  | { type: 'LOGOUT' }
   | { type: 'SET_MACHINES'; payload: Machine[] }
   | { type: 'SET_ALERTS'; payload: Alert[] }
   | { type: 'SET_KPI'; payload: KpiData }
@@ -82,6 +139,7 @@ type Action =
   | { type: 'SET_TELEMETRY'; payload: EnrichedTelemetryLog }
   | { type: 'SET_CONNECTED'; payload: boolean }
   | { type: 'SET_LOADING'; payload: { key: 'machinesLoading' | 'alertsLoading' | 'kpiLoading'; value: boolean } }
+  | { type: 'ADD_WORKER'; payload: Worker }
   | { type: 'ADD_MACHINE'; payload: Machine }
   | { type: 'REMOVE_MACHINE'; payload: number }
   | { type: 'SET_ROLE'; payload: UserRole }
@@ -161,6 +219,40 @@ function enrichTelemetry(raw: TelemetryLog, machineStatus: string): EnrichedTele
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case 'SET_USER_SESSION': {
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(action.payload.user));
+      if (action.payload.token) {
+        localStorage.setItem('fac_mon_token', action.payload.token);
+      }
+      return {
+        ...state,
+        currentUser: action.payload.user,
+        token: action.payload.token,
+        activeRole: action.payload.user.role,
+      };
+    }
+
+    case 'UPDATE_USER_PROFILE': {
+      const updatedUser = state.currentUser ? { ...state.currentUser, ...action.payload } : null;
+      if (updatedUser) {
+        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
+      }
+      return {
+        ...state,
+        currentUser: updatedUser,
+      };
+    }
+
+    case 'LOGOUT': {
+      localStorage.removeItem(STORAGE_KEY_USER);
+      localStorage.removeItem('fac_mon_token');
+      return {
+        ...state,
+        currentUser: null,
+        token: null,
+      };
+    }
+
     case 'SET_MACHINES':
       return { ...state, machines: action.payload, machinesLoading: false };
 
@@ -213,6 +305,13 @@ function reducer(state: AppState, action: Action): AppState {
 
     case 'SET_LOADING':
       return { ...state, [action.payload.key]: action.payload.value };
+
+    case 'ADD_WORKER':
+      return {
+        ...state,
+        workers: [action.payload, ...state.workers],
+        auditLogs: [`New worker registered: ${action.payload.name} (${action.payload.role})`, ...state.auditLogs].slice(0, 50)
+      };
 
     case 'ADD_MACHINE':
       return { ...state, machines: [...state.machines, action.payload] };
@@ -283,6 +382,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         break;
     }
   }, []);
+
+  // Continuous IoT Sensor Simulation Loop (emits telemetry for every machine)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      state.machines.forEach(machine => {
+        const isRunning = machine.status === 'RUNNING';
+        const isError = machine.status === 'ERROR';
+
+        // Physics sensor calculations
+        const baseTemp = isError ? 94 : isRunning ? 68 + (Math.random() * 8) : 25;
+        const baseVib = isError ? 9.2 : isRunning ? 3.5 + (Math.random() * 2) : 0.2;
+        const basePress = isRunning ? 6.5 + (Math.random() * 1.5) : 0.5;
+        const basePower = isRunning ? 45 + (Math.random() * 20) : 2.5;
+
+        const rawTelemetry: TelemetryLog = {
+          id: Date.now() + machine.id,
+          machineId: machine.id,
+          machineCode: machine.machineCode,
+          machineName: machine.name,
+          temperature: Math.round(baseTemp * 10) / 10,
+          vibration: Math.round(baseVib * 10) / 10,
+          pressure: Math.round(basePress * 10) / 10,
+          powerConsumption: Math.round(basePower * 10) / 10,
+          timestamp: new Date().toISOString(),
+        };
+
+        const enriched = enrichTelemetry(rawTelemetry, machine.status);
+        dispatch({ type: 'SET_TELEMETRY', payload: enriched });
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [state.machines]);
 
   return (
     <AppContext.Provider value={{ state, dispatch, handleWsMessage }}>

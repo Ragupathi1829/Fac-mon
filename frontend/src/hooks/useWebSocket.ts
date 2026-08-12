@@ -11,7 +11,7 @@ export const useWebSocket = (
   onMessageRef.current = onMessage; // keep latest handler without re-subscribing
 
   useEffect(() => {
-    const service = new TelemetryWebSocketService('ws://localhost:8080/ws/telemetry');
+    const service = new TelemetryWebSocketService(import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws/telemetry');
     serviceRef.current = service;
 
     service.connect(

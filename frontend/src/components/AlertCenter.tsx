@@ -84,9 +84,11 @@ const AlertCenter: React.FC = () => {
         <h2>Alert Center</h2>
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
           <button 
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1rem' }} 
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1rem', transition: 'transform 0.2s' }} 
             onClick={() => setSoundEnabled(!soundEnabled)}
             title={soundEnabled ? 'Disable Notification Sounds' : 'Enable Notification Sounds'}
+            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.2)')}
+            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
           >
             {soundEnabled ? '🔊' : '🔇'}
           </button>
@@ -116,7 +118,7 @@ const AlertCenter: React.FC = () => {
         {activeAlerts.length > 0 && activeTab === 'ACTIVE' && (
           <button 
             className="filter-tab" 
-            style={{ marginLeft: 'auto', padding: '0.2rem 0.5rem', background: 'rgba(0,230,138,0.1)', color: 'var(--accent-emerald)', border: 'none' }}
+            style={{ marginLeft: 'auto', padding: '0.2rem 0.5rem', background: 'rgba(0,212,255,0.1)', color: '#00d4ff', border: '1px solid rgba(0,212,255,0.3)' }}
             onClick={handleResolveAll}
           >
             ✓ Resolve All
@@ -136,10 +138,11 @@ const AlertCenter: React.FC = () => {
         ) : (
           listToRender.map(alert => {
             const cfg = SEVERITY_CONFIG[alert.severity] ?? SEVERITY_CONFIG.INFO;
+            const isCriticalShake = alert.severity === 'CRITICAL' && !alert.resolved;
             return (
               <div
                 key={alert.id}
-                className={`alert-item ${alert.resolved ? 'alert-resolved' : ''}`}
+                className={`alert-item ${alert.resolved ? 'alert-resolved' : ''} ${isCriticalShake ? 'alert-critical-shake' : ''}`}
                 style={{ borderLeft: `3px solid ${alert.resolved ? '#334155' : cfg.color}`, background: alert.resolved ? 'transparent' : cfg.bg }}
               >
                 <div className="alert-item-header">
@@ -150,7 +153,7 @@ const AlertCenter: React.FC = () => {
                   </div>
                   {!alert.resolved && (
                     <button
-                      className="alert-resolve-btn"
+                      className="alert-resolve-btn ripple-btn"
                       onClick={() => handleResolve(alert)}
                       disabled={resolving === alert.id}
                       title="Resolve alert"

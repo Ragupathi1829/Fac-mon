@@ -1,19 +1,47 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Navbar from '../components/Navbar';
-import ActivityTicker from '../components/ActivityTicker';
 import { useApp } from '../context/AppContext';
+import RegisterModal from '../components/RegisterModal';
 
 const WorkersView: React.FC = () => {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+
+  const activeWorkers = state.workers.map(w => {
+    if (w.shift !== 'MORNING') {
+      return { ...w, attendance: 'ABSENT' as const };
+    }
+    return w;
+  });
 
   return (
     <div className="app-root">
       <Navbar />
-      <ActivityTicker />
       <div className="dashboard-container">
-        <header className="dashboard-header">
-          <h1>👥 Worker Management</h1>
-          <p className="system-time">PULSE · Personnel & Shift Operations</p>
+        <header className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1>👥 Worker Management</h1>
+            <p className="system-time">PULSE · Personnel & Shift Operations</p>
+          </div>
+          <button
+            onClick={() => setIsRegisterOpen(true)}
+            style={{
+              background: 'linear-gradient(135deg, #00e68a, #00d4ff)',
+              color: '#000000',
+              border: 'none',
+              padding: '0.6rem 1.25rem',
+              borderRadius: '10px',
+              fontWeight: 800,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              boxShadow: '0 4px 12px rgba(0,230,138,0.2)'
+            }}
+          >
+            ➕ Register New Worker
+          </button>
         </header>
 
         <main className="dashboard-main">
@@ -24,8 +52,8 @@ const WorkersView: React.FC = () => {
               <div className="kpi-card-body">
                 <h3>Workers Present</h3>
                 <p className="kpi-value">
-                  {state.workers.filter(w => w.attendance === 'PRESENT').length}
-                  <span className="kpi-divider"> / {state.workers.length}</span>
+                  {activeWorkers.filter(w => w.attendance === 'PRESENT').length}
+                  <span className="kpi-divider"> / {activeWorkers.length}</span>
                 </p>
               </div>
             </div>
@@ -43,7 +71,7 @@ const WorkersView: React.FC = () => {
               <div className="kpi-card-body">
                 <h3>Safety Compliance</h3>
                 <p className="kpi-value">
-                  {Math.round((state.workers.filter(w => w.safetyTraining).length / state.workers.length) * 100)}%
+                  {Math.round((activeWorkers.filter(w => w.safetyTraining).length / activeWorkers.length) * 100)}%
                 </p>
               </div>
             </div>
@@ -74,7 +102,7 @@ const WorkersView: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {state.workers.map(w => (
+                  {activeWorkers.map(w => (
                     <tr key={w.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                       <td style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <img src={w.avatar} alt={w.name} style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
@@ -113,6 +141,26 @@ const WorkersView: React.FC = () => {
           </div>
         </main>
       </div>
+
+      <RegisterModal
+        isOpen={isRegisterOpen}
+        onClose={() => setIsRegisterOpen(false)}
+        onSuccess={(newUser) => {
+          dispatch({
+            type: 'ADD_WORKER',
+            payload: {
+              id: newUser.id,
+              name: newUser.fullName,
+              avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100',
+              role: newUser.designation,
+              shift: 'MORNING',
+              attendance: 'PRESENT',
+              safetyTraining: true,
+              performanceScore: 100,
+            }
+          });
+        }}
+      />
     </div>
   );
 };

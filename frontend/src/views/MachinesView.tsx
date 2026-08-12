@@ -21,11 +21,13 @@ const MachinesView: React.FC = () => {
 
   useWebSocket(handleMessage, handleConnectionChange);
 
+  const getStatus = (m: any) => m.status ? m.status.toUpperCase() : 'IDLE';
+
   const statusCounts = {
-    running: state.machines.filter(m => m.status === 'RUNNING').length,
-    idle:    state.machines.filter(m => m.status === 'IDLE').length,
-    stopped: state.machines.filter(m => m.status === 'STOPPED').length,
-    error:   state.machines.filter(m => m.status === 'ERROR').length,
+    running: state.machines.filter(m => getStatus(m) === 'RUNNING').length,
+    idle:    state.machines.filter(m => getStatus(m) === 'IDLE').length,
+    stopped: state.machines.filter(m => getStatus(m) === 'STOPPED').length,
+    error:   state.machines.filter(m => getStatus(m) === 'ERROR').length,
   };
 
   return (

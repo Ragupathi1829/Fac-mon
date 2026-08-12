@@ -2,15 +2,20 @@ import React, { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { machineApi } from '../services/api';
+import AddMachineModal from './AddMachineModal';
 import MachineCard from './MachineCard';
+import type { Machine } from '../types/machine';
 
 type StatusFilter = 'ALL' | 'RUNNING' | 'IDLE' | 'STOPPED' | 'ERROR';
+
+const getStatus = (m: Machine) => m.status ? m.status.toUpperCase() : 'IDLE';
 
 const MachineGrid: React.FC = () => {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const [filter, setFilter] = React.useState<StatusFilter>('ALL');
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [showAddModal, setShowAddModal] = React.useState(false);
 
   const loadMachines = useCallback(async () => {
     dispatch({ type: 'SET_LOADING', payload: { key: 'machinesLoading', value: true } });
@@ -28,31 +33,46 @@ const MachineGrid: React.FC = () => {
   }, [loadMachines]);
 
   const filtered = state.machines.filter(m => {
-    const matchesStatus = filter === 'ALL' || m.status === filter;
+    const matchesStatus = filter === 'ALL' || getStatus(m) === filter;
     const q = searchQuery.toLowerCase();
+    const matchesSensorId = m.fixedSensors?.some(s => s.sensorId.toLowerCase().includes(q) || s.modelNumber.toLowerCase().includes(q));
     const matchesSearch =
       !q ||
       m.name.toLowerCase().includes(q) ||
       m.machineCode.toLowerCase().includes(q) ||
       m.type.toLowerCase().includes(q) ||
-      m.location.toLowerCase().includes(q);
+      m.location.toLowerCase().includes(q) ||
+      (m.failureImpact && m.failureImpact.toLowerCase().includes(q)) ||
+      (m.productionLossRisk && m.productionLossRisk.toLowerCase().includes(q)) ||
+      Boolean(matchesSensorId);
     return matchesStatus && matchesSearch;
   });
 
   const statusCounts = {
     ALL:     state.machines.length,
-    RUNNING: state.machines.filter(m => m.status === 'RUNNING').length,
-    IDLE:    state.machines.filter(m => m.status === 'IDLE').length,
-    STOPPED: state.machines.filter(m => m.status === 'STOPPED').length,
-    ERROR:   state.machines.filter(m => m.status === 'ERROR').length,
+    RUNNING: state.machines.filter(m => getStatus(m) === 'RUNNING').length,
+    IDLE:    state.machines.filter(m => getStatus(m) === 'IDLE').length,
+    STOPPED: state.machines.filter(m => getStatus(m) === 'STOPPED').length,
+    ERROR:   state.machines.filter(m => getStatus(m) === 'ERROR').length,
   };
 
   return (
-    <div className="machine-grid-container">
-      <div className="machine-grid-header">
-        <h2>Factory Floor Machines</h2>
-        <span className="machine-count">{state.machines.length} machines registered</span>
-      </div>
+    <>
+      <div className="machine-grid-container">
+        <div className="machine-grid-header">
+          <div>
+            <h2>Factory Floor Machines</h2>
+            <span className="machine-count">{state.machines.length} IoT-embedded sensor machines registered</span>
+          </div>
+
+          <button 
+            className="btn-add-machine"
+            onClick={() => setShowAddModal(true)}
+            style={{ background: 'var(--accent-pink)', borderColor: 'var(--accent-pink)', color: '#ffffff' }}
+          >
+            ➕ Add Machine
+          </button>
+        </div>
 
       {/* Filters */}
       <div className="machine-filter-bar">
@@ -70,9 +90,10 @@ const MachineGrid: React.FC = () => {
         <input
           className="machine-search"
           type="text"
-          placeholder="Search machines…"
+          placeholder="🔍 Search Machine Name, Code, Sensor ID (e.g. SNS-VIB-105A), or Production Impact…"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
+          style={{ minWidth: '340px' }}
         />
       </div>
 
@@ -102,6 +123,9 @@ const MachineGrid: React.FC = () => {
         </div>
       )}
     </div>
+
+    {showAddModal && <AddMachineModal onClose={() => setShowAddModal(false)} />}
+  </>
   );
 };
 

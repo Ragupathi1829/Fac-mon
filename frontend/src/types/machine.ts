@@ -1,5 +1,15 @@
 export type MachineStatus = 'RUNNING' | 'IDLE' | 'STOPPED' | 'ERROR';
 
+export interface IoTSensorInfo {
+  sensorId: string;
+  sensorType: 'TEMPERATURE' | 'VIBRATION' | 'PRESSURE' | 'POWER' | 'HUMIDITY';
+  modelNumber: string;
+  installationDate: string;
+  calibrationDueDate: string;
+  status: 'ACTIVE' | 'CALIBRATING' | 'FAULTY';
+  lastReading: string;
+}
+
 export interface Machine {
   id: number;
   machineCode: string;
@@ -7,6 +17,10 @@ export interface Machine {
   type: string;
   status: MachineStatus;
   location: string;
+  fixedSensors?: IoTSensorInfo[];
+  failureImpact?: string;
+  productionLossRisk?: string;
+  financialImpactPerHr?: string;
 }
 
 export interface TelemetryLog {

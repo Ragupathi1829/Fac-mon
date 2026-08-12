@@ -4,7 +4,7 @@ export class TelemetryWebSocketService {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = 3000;
 
-  constructor(url: string = 'ws://localhost:8080/ws/telemetry') {
+  constructor(url: string = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/ws/telemetry') {
     this.url = url;
   }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
 import type { Machine, TelemetryLog } from '../types/machine';
 
 interface MachineCardProps {
@@ -18,9 +18,41 @@ const MachineCard: React.FC<MachineCardProps> = ({ machine, telemetry, onClick }
   const cfg = STATUS_CONFIG[machine.status] ?? STATUS_CONFIG.IDLE;
   const isRunning = machine.status === 'RUNNING';
   const isError = machine.status === 'ERROR';
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // 3D tilt effect on mouse move
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const card = cardRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const rotateX = ((y - centerY) / centerY) * -6; // max 6 degrees
+    const rotateY = ((x - centerX) / centerX) * 6;
+
+    card.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-5px) scale(1.02)`;
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    card.style.transform = '';
+  }, []);
 
   return (
-    <div className="machine-card" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+    <div
+      ref={cardRef}
+      className="machine-card"
+      onClick={onClick}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{ cursor: onClick ? 'pointer' : 'default' }}
+    >
+      {/* Shimmer sweep overlay */}
+      <div className="card-shimmer" />
+
       {/* Status glow accent bar */}
       <div className="machine-card-accent" style={{ background: `linear-gradient(90deg, ${cfg.color}, transparent)` }} />
 
@@ -32,11 +64,11 @@ const MachineCard: React.FC<MachineCardProps> = ({ machine, telemetry, onClick }
         </div>
         <div className="machine-status-badge" style={{ background: cfg.glow, color: cfg.color, border: `1px solid ${cfg.color}40` }}>
           <span
-            className="status-dot"
+            className={`status-dot ${isRunning ? 'running' : ''}`}
             style={{
               background: cfg.dot,
               boxShadow: isRunning ? `0 0 8px ${cfg.dot}` : 'none',
-              animation: isRunning ? 'livePulse 2s ease-in-out infinite' : isError ? 'pulse-dot 1s ease-in-out infinite' : 'none',
+              animation: isError ? 'pulse-dot 1s ease-in-out infinite' : 'none',
             }}
           />
           {cfg.label}
@@ -67,10 +99,34 @@ const MachineCard: React.FC<MachineCardProps> = ({ machine, telemetry, onClick }
         </div>
       )}
 
+      {/* Fixed IoT Sensors & Production Impact Summary */}
+      <div style={{ margin: '0.6rem 0', background: 'rgba(0,0,0,0.25)', padding: '0.6rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>
+          <span>🛰️ Fixed IoT Sensors:</span>
+          <span style={{ color: '#00d4ff', fontWeight: 700 }}>
+            {machine.fixedSensors ? `${machine.fixedSensors.length} Nodes` : '4 Nodes'}
+          </span>
+        </div>
+        {machine.fixedSensors && machine.fixedSensors.length > 0 && (
+          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
+            {machine.fixedSensors.slice(0, 3).map(s => (
+              <span key={s.sensorId} style={{ background: 'rgba(0,212,255,0.1)', color: '#00d4ff', border: '1px solid rgba(0,212,255,0.25)', padding: '0.1rem 0.35rem', borderRadius: '4px', fontSize: '0.62rem', fontFamily: 'monospace', fontWeight: 700 }}>
+                {s.sensorId}
+              </span>
+            ))}
+          </div>
+        )}
+        {machine.productionLossRisk && (
+          <div style={{ fontSize: '0.68rem', color: isError ? '#ff3b6a' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.3rem' }}>
+            <span>⚠️ Impact: <strong style={{ color: isError ? '#ff3b6a' : '#ffffff' }}>{machine.productionLossRisk}</strong></span>
+          </div>
+        )}
+      </div>
+
       {/* Click hint */}
       {onClick && (
         <div className="machine-card-footer">
-          <span>View details →</span>
+          <span>Inspect Attached Sensors & Production Loss →</span>
         </div>
       )}
     </div>
@@ -108,6 +164,7 @@ const GaugeMetric: React.FC<GaugeMetricProps> = ({ label, value, unit, max, warn
             stroke={color}
             strokeDasharray={`${circumference}`}
             strokeDashoffset={dashOffset}
+            style={{ filter: `drop-shadow(0 0 3px ${color}80)` }}
           />
         </svg>
         <span className="gauge-value-text" style={{ color }}>

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import Navbar from '../components/Navbar';
-import ActivityTicker from '../components/ActivityTicker';
 import { useApp } from '../context/AppContext';
 
 const MaintenanceInventoryView: React.FC = () => {
@@ -63,7 +62,6 @@ const MaintenanceInventoryView: React.FC = () => {
   return (
     <div className="app-root">
       <Navbar />
-      <ActivityTicker />
       <div className="dashboard-container">
         <header className="dashboard-header">
           <h1>🛠️ Maintenance & Inventory</h1>
@@ -109,8 +107,8 @@ const MaintenanceInventoryView: React.FC = () => {
                             </span>
                           </td>
                           <td style={{ padding: '0.75rem' }}>
-                            <button
-                              className="alert-resolve-btn"
+                            <button 
+                              className="btn-outline-action"
                               style={{ padding: '0.2rem 0.5rem', fontSize: '0.68rem' }}
                               onClick={() => handleRestock(item.id, item.stockLevel)}
                             >

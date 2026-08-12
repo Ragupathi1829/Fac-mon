@@ -1,23 +1,230 @@
-# Backend
+# =============================================================================
+# SmartFactory 360 — Production-Safe .gitignore
+# React + TypeScript + Vite (frontend) | Spring Boot + Maven (backend) | MySQL
+# =============================================================================
+
+# ─────────────────────────────────────────────────────────────────────────────
+# !! CRITICAL: NEVER COMMIT CREDENTIALS OR SECRETS !!
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Environment variable files (DB passwords, API keys, JWT secrets, OTP keys)
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.production.example
+!.env.local.example
+!frontend/.env.production
+
+# Backend-specific env / credential files
+backend/.env
+backend/.env.*
+backend/secrets/
+
+# Re-allow example templates (no real credentials — safe to commit)
+!backend/.env.example
+!backend/.env.*.example
+
+# Spring Boot local / secret overrides (may contain DB credentials)
+backend/application-local.yml
+backend/application-secrets.yml
+backend/src/main/resources/application-local.yml
+backend/src/main/resources/application-secrets.yml
+application-local.yml
+**/application-local.properties
+**/*-secrets.yml
+**/*-secrets.properties
+
+# JWT / TLS / PKI credential files
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+*.truststore
+jwt-secret.txt
+secret.txt
+secrets.txt
+
+# Third-party service credentials (Twilio, SMTP, SendGrid, etc.)
+twilio.properties
+twilio.yml
+smtp.properties
+sendgrid.properties
+
+# Cloud provider key files
+*.credentials
+serviceAccountKey.json
+google-credentials.json
+aws-credentials.properties
+azure-credentials.properties
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BACKEND — Spring Boot / Maven
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Maven build output
 backend/target/
-backend/.mvn/
-backend/*.jar
+target/
 *.class
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
+# Compiled / packaged JARs  (keep Maven wrapper JAR)
+*.jar
+!backend/.mvn/wrapper/maven-wrapper.jar
 
-# IDE
+# Maven settings (may contain repository server credentials)
+.m2/settings.xml
+.mvn/settings.xml
+
+# H2 embedded database files
+*.db
+*.h2.mv.db
+*.h2.trace.db
+
+# Spring Boot DevTools restart trigger
+.reloadtrigger
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FRONTEND — React + TypeScript + Vite
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Node.js dependencies (always regenerable from package.json + package-lock.json)
+node_modules/
+frontend/node_modules/
+**/node_modules/
+
+# Vite / TypeScript build output
+frontend/dist/
+dist/
+frontend/.vite/
+.vite/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+frontend/tsconfig.app.tsbuildinfo
+frontend/tsconfig.node.tsbuildinfo
+
+# Vite local-only env overrides
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IDE & EDITOR
+# ─────────────────────────────────────────────────────────────────────────────
+
+# VS Code (personal workspace settings)
 .vscode/
+
+# JetBrains (IntelliJ IDEA, WebStorm, etc.)
 .idea/
 *.iml
+*.iws
+*.ipr
+out/
 
-# OS
+# Eclipse
+.classpath
+.project
+.settings/
+.factorypath
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OPERATING SYSTEM ARTIFACTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# macOS
 .DS_Store
-Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 
-# Env
-.env
-application-local.yml
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LOGS & DIAGNOSTICS
+# ─────────────────────────────────────────────────────────────────────────────
+
 *.log
+*.log.*
+logs/
+backend/logs/
+frontend/logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+spring.log
+application.log
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TEST ARTIFACTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+backend/target/surefire-reports/
+backend/target/failsafe-reports/
+coverage/
+.nyc_output/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MISCELLANEOUS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Temporary / scratch files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# Distribution archives
+*.zip
+*.tar.gz
+*.war
+
+# Docker local-only overrides
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPLICIT NEVER-IGNORE — source files that MUST always be committed
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Maven wrapper (required to build without local Maven install)
+!backend/.mvn/
+!backend/.mvn/**
+!backend/mvnw
+!backend/mvnw.cmd
+!backend/pom.xml
+!backend/src/**
+!backend/src/main/resources/application.yml
+!backend/src/main/resources/application-prod.yml
+
+# Frontend source
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/vite.config.ts
+!frontend/tsconfig.json
+!frontend/tsconfig.app.json
+!frontend/tsconfig.node.json
+!frontend/index.html
+!frontend/src/**
+!frontend/public/**
+!frontend/.env.production
+
+# Database schema (no credentials inside)
+!database/schema.sql
+!database/docker-compose.yml
+
+# Root project files
+!README.md
+!.gitignore

@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { dashboardApi } from '../services/api';
 
@@ -32,6 +32,90 @@ const ShieldIcon = () => (
   </svg>
 );
 
+// ── Animated Count-Up Hook ────────────────────────────────────────────────────
+function useCountUp(target: number, duration: number = 800): number {
+  const [current, setCurrent] = useState(0);
+  const prevRef = useRef(0);
+
+  useEffect(() => {
+    if (target === prevRef.current) return;
+    const start = prevRef.current;
+    const diff = target - start;
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const val = start + diff * eased;
+      setCurrent(Math.round(val * 10) / 10); // 1 decimal precision
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        prevRef.current = target;
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [target, duration]);
+
+  return current;
+}
+
+// ── 3D Tilt Card Wrapper ──────────────────────────────────────────────────────
+interface TiltCardProps {
+  className: string;
+  glowColor: string;
+  children: React.ReactNode;
+}
+
+const TiltCard: React.FC<TiltCardProps> = ({ className, glowColor, children }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const card = cardRef.current;
+    const glow = glowRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const rotateX = ((y - centerY) / centerY) * -5;
+    const rotateY = ((x - centerX) / centerX) * 5;
+
+    card.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-4px)`;
+    if (glow) {
+      glow.style.left = `${x}px`;
+      glow.style.top = `${y}px`;
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    card.style.transform = '';
+  }, []);
+
+  return (
+    <div
+      ref={cardRef}
+      className={className}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div
+        ref={glowRef}
+        className="card-glow"
+        style={{ '--glow-color': glowColor } as React.CSSProperties}
+      />
+      {children}
+    </div>
+  );
+};
+
 const KpiPanel: React.FC = () => {
   const { state, dispatch } = useApp();
 
@@ -55,10 +139,17 @@ const KpiPanel: React.FC = () => {
 
   const kpi = state.kpi;
 
+  // Animated values
+  const animRunning = useCountUp(kpi?.runningMachines ?? 0);
+  const animTotal = useCountUp(kpi?.totalMachines ?? 0);
+  const animOee = useCountUp(kpi?.oeePercent ?? 0, 1200);
+  const animAlerts = useCountUp(kpi?.activeAlerts ?? 0);
+  const animErrors = useCountUp(kpi?.errorMachines ?? 0);
+
   return (
-    <div className="kpi-panel">
+    <div className="kpi-panel reveal-stagger">
       {/* Active Machines */}
-      <div className="kpi-card kpi-card-cyan">
+      <TiltCard className="kpi-card kpi-card-cyan reveal" glowColor="rgba(0,212,255,0.12)">
         <div className="kpi-card-icon" style={{ color: '#00d4ff' }}>
           <GearIcon />
         </div>
@@ -68,8 +159,8 @@ const KpiPanel: React.FC = () => {
             <p className="kpi-value skeleton-text">—</p>
           ) : (
             <p className="kpi-value">
-              <span className="kpi-highlight">{kpi?.runningMachines ?? 0}</span>
-              <span className="kpi-divider"> / {kpi?.totalMachines ?? 0}</span>
+              <span className="kpi-highlight count-up-value">{Math.round(animRunning)}</span>
+              <span className="kpi-divider"> / {Math.round(animTotal)}</span>
             </p>
           )}
           <div className="kpi-sub-row">
@@ -77,10 +168,10 @@ const KpiPanel: React.FC = () => {
             <span className="kpi-sub stopped">Stopped: {kpi?.stoppedMachines ?? 0}</span>
           </div>
         </div>
-      </div>
+      </TiltCard>
 
       {/* OEE */}
-      <div className="kpi-card kpi-card-emerald">
+      <TiltCard className="kpi-card kpi-card-emerald reveal" glowColor="rgba(0,230,138,0.12)">
         <div className="kpi-card-icon" style={{ color: '#00e68a' }}>
           <ChartIcon />
         </div>
@@ -90,7 +181,7 @@ const KpiPanel: React.FC = () => {
             <p className="kpi-value skeleton-text">—</p>
           ) : (
             <p className="kpi-value">
-              <span className="kpi-highlight">{kpi?.oeePercent?.toFixed(1) ?? '--'}</span>
+              <span className="kpi-highlight count-up-value">{animOee.toFixed(1)}</span>
               <span className="kpi-unit"> %</span>
             </p>
           )}
@@ -98,10 +189,13 @@ const KpiPanel: React.FC = () => {
             <div className="oee-bar-fill" style={{ width: `${kpi?.oeePercent ?? 0}%` }} />
           </div>
         </div>
-      </div>
+      </TiltCard>
 
       {/* Active Alerts */}
-      <div className={`kpi-card ${(kpi?.criticalAlerts ?? 0) > 0 ? 'kpi-card-rose' : 'kpi-card-amber'}`}>
+      <TiltCard
+        className={`kpi-card ${(kpi?.criticalAlerts ?? 0) > 0 ? 'kpi-card-rose' : 'kpi-card-amber'} reveal`}
+        glowColor={(kpi?.criticalAlerts ?? 0) > 0 ? 'rgba(255,59,106,0.12)' : 'rgba(255,176,32,0.12)'}
+      >
         <div className="kpi-card-icon" style={{ color: (kpi?.criticalAlerts ?? 0) > 0 ? '#ff3b6a' : '#ffb020' }}>
           <AlertIcon />
         </div>
@@ -111,7 +205,7 @@ const KpiPanel: React.FC = () => {
             <p className="kpi-value skeleton-text">—</p>
           ) : (
             <p className="kpi-value">
-              <span className="kpi-highlight">{kpi?.activeAlerts ?? 0}</span>
+              <span className="kpi-highlight count-up-value">{Math.round(animAlerts)}</span>
             </p>
           )}
           <div className="kpi-sub-row">
@@ -119,10 +213,10 @@ const KpiPanel: React.FC = () => {
             <span className="kpi-sub warning">Warning: {kpi?.warningAlerts ?? 0}</span>
           </div>
         </div>
-      </div>
+      </TiltCard>
 
       {/* Machine Errors */}
-      <div className="kpi-card kpi-card-blue">
+      <TiltCard className="kpi-card kpi-card-blue reveal" glowColor="rgba(59,130,246,0.12)">
         <div className="kpi-card-icon" style={{ color: '#3b82f6' }}>
           <ShieldIcon />
         </div>
@@ -132,13 +226,13 @@ const KpiPanel: React.FC = () => {
             <p className="kpi-value skeleton-text">—</p>
           ) : (
             <p className="kpi-value">
-              <span className="kpi-highlight">{kpi?.errorMachines ?? 0}</span>
+              <span className="kpi-highlight count-up-value">{Math.round(animErrors)}</span>
               <span className="kpi-unit"> machines</span>
             </p>
           )}
           <p className="kpi-sub">{kpi?.errorMachines === 0 ? '✅ All systems nominal' : '⚠️ Requires attention'}</p>
         </div>
-      </div>
+      </TiltCard>
     </div>
   );
 };
