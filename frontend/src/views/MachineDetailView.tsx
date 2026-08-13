@@ -75,6 +75,17 @@ const MachineDetailView: React.FC = () => {
     }
   };
 
+  const handleResolveAlert = async (alert: Alert) => {
+    if (alert.resolved) return;
+    try {
+      const resolved = await alertApi.resolve(alert.id);
+      setMachineAlerts(prev => prev.map(a => a.id === alert.id ? resolved : a));
+      dispatch({ type: 'RESOLVE_ALERT', payload: resolved });
+    } catch (err) {
+      console.error('Failed to resolve alert:', err);
+    }
+  };
+
   const handleAddSensor = () => {
     const sensorNameMap: Record<string, string> = {
       Temperature: 'Infrared Thermal Probe',
@@ -444,9 +455,19 @@ const MachineDetailView: React.FC = () => {
                     {alert.severity}
                   </span>
                   <span className="alert-time">{new Date(alert.timestamp).toLocaleString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}</span>
-                  {alert.resolved && <span className="alert-resolved-tag">Resolved</span>}
+                  {!alert.resolved && (
+                    <button
+                      className="alert-resolve-btn ripple-btn"
+                      style={{ marginLeft: 'auto', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '0.2rem 0.5rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.75rem' }}
+                      onClick={() => handleResolveAlert(alert)}
+                      title="Resolve alert"
+                    >
+                      ✓ Resolve
+                    </button>
+                  )}
+                  {alert.resolved && <span className="alert-resolved-tag" style={{ marginLeft: 'auto' }}>Resolved</span>}
                 </div>
-                <p className="alert-message">{alert.message}</p>
+                <p className="alert-message" style={{ marginTop: '0.5rem' }}>{alert.message}</p>
               </div>
             ))
           )}

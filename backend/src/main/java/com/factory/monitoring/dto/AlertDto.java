@@ -22,6 +22,10 @@ public class AlertDto {
     private String machineName;
     private String message;
     private String severity; // INFO, WARNING, CRITICAL
+    private String alertType; // TEMPERATURE, VIBRATION, PRESSURE, POWER
+    private Double actualValue;
+    private Double thresholdValue;
+    private String machineStatus;
     private Boolean resolved;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")

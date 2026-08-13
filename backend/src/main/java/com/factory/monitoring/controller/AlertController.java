@@ -30,10 +30,10 @@ public class AlertController {
     }
 
     /**
-     * GET /api/alerts/active
+     * GET /api/alerts/active or /api/alerts/unresolved
      * All unresolved alerts, newest first.
      */
-    @GetMapping("/active")
+    @GetMapping({"/active", "/unresolved"})
     public ResponseEntity<List<AlertDto>> getActiveAlerts() {
         return ResponseEntity.ok(alertService.getActiveAlerts());
     }
@@ -58,25 +58,30 @@ public class AlertController {
     }
 
     /**
-     * PATCH /api/alerts/{id}/resolve
+     * PATCH /api/alerts/{id}/resolve OR PUT /api/alerts/{id}/resolve
      * Mark an alert as resolved.
      */
-    @PatchMapping("/{id}/resolve")
+    @RequestMapping(value = "/{id}/resolve", method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ResponseEntity<AlertDto> resolveAlert(@PathVariable Long id) {
         return ResponseEntity.ok(alertService.resolveAlert(id));
     }
 
     /**
-     * GET /api/alerts/counts
-     * Returns active alert counts by severity (for KPI panel).
+     * GET /api/alerts/stats
+     * Returns alert statistics (for KPI panel).
      */
-    @GetMapping("/counts")
-    public ResponseEntity<Map<String, Long>> getAlertCounts() {
+    @GetMapping({"/counts", "/stats"})
+    public ResponseEntity<Map<String, Long>> getAlertStats() {
+        long total = alertService.countTotalAlerts();
+        long unresolved = alertService.countActiveAlerts();
+        
         Map<String, Long> counts = Map.of(
-                "total",    alertService.countActiveAlerts(),
-                "critical", alertService.countActiveAlertsBySeverity("CRITICAL"),
-                "warning",  alertService.countActiveAlertsBySeverity("WARNING"),
-                "info",     alertService.countActiveAlertsBySeverity("INFO")
+                "totalAlerts", total,
+                "criticalAlerts", alertService.countActiveAlertsBySeverity("CRITICAL"),
+                "warningAlerts",  alertService.countActiveAlertsBySeverity("WARNING"),
+                "infoAlerts",     alertService.countActiveAlertsBySeverity("INFO"),
+                "unresolvedAlerts", unresolved,
+                "resolvedAlerts", total - unresolved
         );
         return ResponseEntity.ok(counts);
     }

@@ -31,3 +31,7 @@ logging:
 
 cors:
   allowed-origins: ${ALLOWED_ORIGINS:https://your-production-domain.com}
+
+telemetry:
+  simulator:
+    enabled: false # Never auto-run in prod unless forced

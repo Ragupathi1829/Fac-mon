@@ -57,3 +57,20 @@ twilio:
 
 cors:
   allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5174,http://localhost:5173,http://localhost:3000}
+
+telemetry:
+  simulator:
+    enabled: true
+  thresholds:
+    temperature:
+      warning: 75.0
+      critical: 85.0
+    vibration:
+      warning: 5.0
+      critical: 7.0
+    pressure:
+      warning: 8.0
+      critical: 10.0
+    power:
+      warning: 80.0
+      critical: 90.0

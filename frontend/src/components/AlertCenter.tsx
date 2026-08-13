@@ -14,6 +14,9 @@ const AlertCenter: React.FC = () => {
   const [resolving, setResolving] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'RESOLVED'>('ACTIVE');
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [filterSeverity, setFilterSeverity] = useState<string>('ALL');
+  const [filterMachine, setFilterMachine] = useState<string>('ALL');
+  const [filterDate, setFilterDate] = useState<string>('ALL');
 
   const loadAlerts = useCallback(async () => {
     dispatch({ type: 'SET_LOADING', payload: { key: 'alertsLoading', value: true } });
@@ -76,7 +79,22 @@ const AlertCenter: React.FC = () => {
 
   const activeAlerts = state.alerts.filter(a => !a.resolved);
   const resolvedAlerts = state.alerts.filter(a => a.resolved);
-  const listToRender = activeTab === 'ACTIVE' ? activeAlerts : resolvedAlerts;
+  let listToRender = activeTab === 'ACTIVE' ? activeAlerts : resolvedAlerts;
+  
+  // Apply advanced filters
+  if (filterSeverity !== 'ALL') {
+    listToRender = listToRender.filter(a => a.severity === filterSeverity);
+  }
+  if (filterMachine !== 'ALL') {
+    listToRender = listToRender.filter(a => a.machineCode === filterMachine);
+  }
+  if (filterDate === 'TODAY') {
+    const today = new Date().toISOString().split('T')[0];
+    listToRender = listToRender.filter(a => a.timestamp.startsWith(today));
+  }
+  
+  // Extract unique machine codes for filter dropdown
+  const uniqueMachines = Array.from(new Set(state.alerts.map(a => a.machineCode)));
 
   return (
     <div className="alert-center">
@@ -99,7 +117,7 @@ const AlertCenter: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem' }}>
+      <div style={{ display: 'flex', gap: '0.25rem', paddingBottom: '0.5rem' }}>
         <button 
           className="filter-tab" 
           style={{ padding: '0.2rem 0.5rem', background: activeTab === 'ACTIVE' ? 'rgba(255,59,106,0.1)' : 'transparent', color: activeTab === 'ACTIVE' ? 'var(--accent-rose)' : 'var(--text-muted)', border: 'none' }}
@@ -124,6 +142,38 @@ const AlertCenter: React.FC = () => {
             ✓ Resolve All
           </button>
         )}
+      </div>
+
+      {/* Advanced Filters */}
+      <div style={{ display: 'flex', gap: '0.4rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+        <select 
+          value={filterSeverity} 
+          onChange={(e) => setFilterSeverity(e.target.value)}
+          style={{ background: 'rgba(0,0,0,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '0.2rem', fontSize: '0.8rem' }}
+        >
+          <option value="ALL">All Severities</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="WARNING">Warning</option>
+          <option value="INFO">Info</option>
+        </select>
+
+        <select 
+          value={filterMachine} 
+          onChange={(e) => setFilterMachine(e.target.value)}
+          style={{ background: 'rgba(0,0,0,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '0.2rem', fontSize: '0.8rem' }}
+        >
+          <option value="ALL">All Machines</option>
+          {uniqueMachines.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+        
+        <select 
+          value={filterDate} 
+          onChange={(e) => setFilterDate(e.target.value)}
+          style={{ background: 'rgba(0,0,0,0.2)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', padding: '0.2rem', fontSize: '0.8rem' }}
+        >
+          <option value="ALL">All Time</option>
+          <option value="TODAY">Today</option>
+        </select>
       </div>
 
       <div className="alert-list">

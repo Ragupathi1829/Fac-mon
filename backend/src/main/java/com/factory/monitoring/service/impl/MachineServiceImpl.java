@@ -5,6 +5,7 @@ import com.factory.monitoring.dto.MachineDto;
 import com.factory.monitoring.exception.ResourceNotFoundException;
 import com.factory.monitoring.repository.MachineRepository;
 import com.factory.monitoring.service.MachineService;
+import com.factory.monitoring.service.MachineHealthService;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -13,9 +14,12 @@ import java.util.List;
 public class MachineServiceImpl implements MachineService {
 
     private final MachineRepository machineRepository;
+    private final MachineHealthService healthService;
 
-    public MachineServiceImpl(MachineRepository machineRepository) {
+    public MachineServiceImpl(MachineRepository machineRepository,
+                              MachineHealthService healthService) {
         this.machineRepository = machineRepository;
+        this.healthService = healthService;
     }
 
     @Override
@@ -93,6 +97,13 @@ public class MachineServiceImpl implements MachineService {
         dto.setType(machine.getType());
         dto.setStatus(machine.getStatus());
         dto.setLocation(machine.getLocation());
+        
+        if (machine.getId() != null) {
+            dto.setHealthScore(healthService.calculateHealthScore(machine.getId(), machine.getStatus()));
+        } else {
+            dto.setHealthScore(100);
+        }
+        
         return dto;
     }
 

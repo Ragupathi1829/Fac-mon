@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="frontend/public/favicon.svg" width="80" alt="PULSE Logo" />
+  <img src="frontend/public/favicon.svg" width="80" alt="SmartFactory 360 Logo" />
 </p>
 
-<h1 align="center">🏭 PULSE — Factory Monitoring System</h1>
+<h1 align="center">🏭 SmartFactory 360 — Advanced Factory Monitoring System</h1>
 
 <p align="center">
-  <b>Real-time factory floor monitoring with live telemetry, alerts, and analytics</b>
+  <b>Industry 4.0 real-time factory floor monitoring with live telemetry, digital twins, AI insights, and sustainability tracking</b>
 </p>
 
 <p align="center">
@@ -21,48 +21,53 @@
 
 ## 📖 Overview
 
-**PULSE** (Plant Unified Live Surveillance Engine) is a full-stack factory monitoring system that provides real-time visibility into machine health, telemetry data, and operational alerts on the factory floor. It features a **Spring Boot** backend with **WebSocket** support for live data streaming and a **React + TypeScript** frontend with interactive dashboards and charts.
+**SmartFactory 360** (formerly PULSE) is a state-of-the-art Industry 4.0 full-stack factory monitoring system. It provides real-time visibility into machine health, telemetry data, and operational alerts on the factory floor while introducing advanced capabilities like Role-Based Access Control (RBAC), a Digital Twin Floor Map, AI Predictions, a Sustainability Dashboard, and Resource Planners. 
+
+It features a robust **Spring Boot** backend with secure **JWT Authentication** and **WebSocket** support, alongside a responsive **React + TypeScript** frontend with interactive dashboards.
 
 ### ✨ Key Features
 
 | Feature | Description |
 |---------|-------------|
-| 🔴 **Live Dashboard** | Real-time KPI panels showing machine statuses at a glance |
-| 📡 **WebSocket Streaming** | Persistent connections for instant telemetry updates |
-| 📊 **Telemetry Charts** | Interactive charts for temperature, vibration, pressure & power consumption |
-| 🚨 **Alert System** | Severity-based alerts (INFO / WARNING / CRITICAL) with resolution tracking |
-| 🖥️ **Machine Detail View** | Drill-down view for individual machine telemetry and history |
-| 🔄 **Telemetry Simulator** | Built-in simulator for demo/testing without physical hardware |
+| 🔐 **RBAC & Authentication** | Secure login, role-based access control (Admin, Manager, Operator), OTP verification, and comprehensive User Profiles |
+| 🔴 **Live Dashboard & Digital Twin** | Real-time KPI panels and an interactive Floor Map showing live machine statuses and locations |
+| 🤖 **AI Assistant & Predictions** | Integrated AI Chat Assistant providing operational insights, quick actions, and predictive maintenance |
+| ♻️ **Sustainability Dashboard** | Monitor factory energy consumption, carbon footprint, water usage, and resource efficiency over time |
+| 📡 **WebSocket Streaming** | Persistent connections for instant telemetry updates and alert notifications |
+| 📊 **Telemetry Charts** | Interactive charting for temperature, vibration, pressure, & power consumption metrics |
+| 🚨 **Alert System** | Severity-based alerts (INFO / WARNING / CRITICAL) with real-time push and resolution tracking |
+| 📋 **Resource Planners** | Dedicated modules for Workers Management, Maintenance Inventory, and a Document Center |
 
 ---
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Frontend (React + Vite)                   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────┐  │
-│  │ Dashboard │  │ Machine  │  │  Alert   │  │    KPI     │  │
-│  │   View   │  │  Detail  │  │  Center  │  │   Panel    │  │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └─────┬──────┘  │
-│       │              │             │              │          │
-│  ┌────┴──────────────┴─────────────┴──────────────┴──────┐  │
-│  │          REST Client (Axios) + WebSocket Client        │  │
-│  └───────────────────────┬───────────────────────────────┘  │
-└──────────────────────────┼──────────────────────────────────┘
-                           │  HTTP / WebSocket
-┌──────────────────────────┼──────────────────────────────────┐
-│                  Backend (Spring Boot 3.3)                    │
-│  ┌───────────────────────┴───────────────────────────────┐  │
-│  │        REST Controllers  +  WebSocket Handler          │  │
-│  └───────────────────────┬───────────────────────────────┘  │
-│  ┌───────────────────────┴───────────────────────────────┐  │
-│  │                    Service Layer                        │  │
-│  └───────────────────────┬───────────────────────────────┘  │
-│  ┌───────────────────────┴───────────────────────────────┐  │
-│  │              JPA Repository Layer (Hibernate)          │  │
-│  └───────────────────────┬───────────────────────────────┘  │
-└──────────────────────────┼──────────────────────────────────┘
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Frontend (React + Vite)                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────┐  ┌─────────┐ │
+│  │ Dashboard │  │ Digital  │  │  Alert   │  │   Sustain- │  │  AI     │ │
+│  │   View   │  │   Twin   │  │  Center  │  │   ability  │  │Assistant│ │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └─────┬──────┘  └────┬────┘ │
+│       │              │             │              │             │      │
+│  ┌────┴──────────────┴─────────────┴──────────────┴─────────────┴────┐ │
+│  │               REST Client (Axios) + WebSocket Client              │ │
+│  └───────────────────────┬───────────────────────────────┬───────────┘ │
+└──────────────────────────┼───────────────────────────────┼─────────────┘
+                           │  HTTP / WebSocket             │ HTTP (JWT)
+┌──────────────────────────┼───────────────────────────────┼─────────────┐
+│                       Backend (Spring Boot 3.3)                        │
+│  ┌───────────────────────┴───────────────────────────────┴───────────┐ │
+│  │    REST Controllers (Auth, Telemetry, Profiles, Alerts, etc.)     │ │
+│  │                      + WebSocket Handler                          │ │
+│  └───────────────────────┬───────────────────────────────┬───────────┘ │
+│  ┌───────────────────────┴───────────────────────────────┴───────────┐ │
+│  │     Service Layer (Security, RBAC, Telemetry, OTP, AI logic)      │ │
+│  └───────────────────────┬───────────────────────────────┬───────────┘ │
+│  ┌───────────────────────┴───────────────────────────────┴───────────┐ │
+│  │                  JPA Repository Layer (Hibernate)                 │ │
+│  └───────────────────────┬───────────────────────────────────────────┘ │
+└──────────────────────────┼─────────────────────────────────────────────┘
                            │
                     ┌──────┴──────┐
                     │  MySQL 8.0  │
@@ -75,10 +80,10 @@
 
 ### Backend
 - **Java 21** with **Spring Boot 3.3.2**
+- **Spring Security & JWT** — Secure authentication and API protection
 - **Spring Data JPA** — ORM and data access
 - **Spring WebSocket** — Real-time bidirectional communication
-- **Spring Actuator** — Health checks & monitoring endpoints
-- **Lombok** — Boilerplate reduction
+- **Twilio API** — For OTP and SMS-based verification flows
 - **MySQL 8.0** — Relational database
 - **HikariCP** — High-performance connection pooling
 
@@ -88,10 +93,6 @@
 - **React Router DOM 7** — Client-side routing
 - **Recharts 3** — Composable charting library
 - **Axios** — HTTP client
-
-### Infrastructure
-- **Docker Compose** — MySQL containerized setup
-- **Maven** — Backend build & dependency management
 
 ---
 
@@ -123,8 +124,7 @@ docker-compose up -d
 ```
 
 This starts a MySQL 8.0 instance with:
-- Database: `factory_db`
-- User: `factory_user` / Password: `factory_password`
+- Database: `factory_monitoring`
 - Port: `3306`
 
 **Option B — Manual MySQL Setup:**
@@ -133,23 +133,21 @@ This starts a MySQL 8.0 instance with:
 CREATE DATABASE factory_monitoring;
 ```
 
-Then run the schema file:
-
-```bash
-mysql -u root -p factory_monitoring < database/schema.sql
-```
+Then run the schema initialization (or let Spring Boot Auto DDL handle it).
 
 ### 3. Configure the Backend
 
-Update `backend/src/main/resources/application.yml` with your database credentials:
+The backend utilizes **Spring Profiles** to manage configurations cleanly. By default, it runs on the `local` profile. Configure environment variables or override the properties in `backend/src/main/resources/application.yml` (or create an `application-local.yml`):
 
 ```yaml
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/factory_monitoring?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: root
-    password: your_password
+    url: ${DB_URL:jdbc:mysql://localhost:3306/factory_monitoring?useSSL=false}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:your_password}
 ```
+
+*Note: For OTP features, configure your Twilio credentials in the environment or properties.*
 
 ### 4. Start the Backend
 
@@ -168,14 +166,21 @@ npm install
 npm run dev
 ```
 
-The frontend starts on **http://localhost:5173**.
+The frontend starts on **http://localhost:5173** (or 5174).
 
 ---
 
 ## 📡 API Endpoints
 
-### Machines
+### Authentication & Profiles
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/login` | Authenticate user and get JWT |
+| `POST` | `/api/auth/register` | Register a new user |
+| `POST` | `/api/otp/verify` | Verify OTP |
+| `GET` | `/api/profile/{id}` | Get user profile details |
 
+### Machines
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/machines` | List all machines |
@@ -183,84 +188,53 @@ The frontend starts on **http://localhost:5173**.
 | `POST` | `/api/machines` | Register a new machine |
 | `PATCH` | `/api/machines/{id}` | Update machine details |
 
-### Telemetry
-
+### Telemetry & Dashboard
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/telemetry` | Get telemetry logs |
-| `GET` | `/api/telemetry/machine/{id}` | Get telemetry for a specific machine |
-| `POST` | `/api/telemetry` | Submit telemetry data |
+| `GET` | `/api/telemetry/machine/{id}` | Get telemetry history for a machine |
+| `GET` | `/api/dashboard/summary` | Get aggregated dashboard KPIs |
 
 ### Alerts
-
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/alerts` | List all alerts |
-| `GET` | `/api/alerts/machine/{id}` | Get alerts for a specific machine |
 | `PATCH` | `/api/alerts/{id}/resolve` | Resolve an alert |
 
-### Dashboard
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/dashboard/summary` | Get dashboard KPIs |
-
 ### WebSocket
-
 | Protocol | Endpoint | Description |
 |----------|----------|-------------|
-| `WS` | `/ws/telemetry` | Live telemetry stream |
-
-### Actuator
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/actuator/health` | Application health check |
-| `GET` | `/actuator/info` | Application info |
+| `WS` | `/ws/telemetry` | Live telemetry & alerts stream |
 
 ---
 
 ## 📁 Project Structure
 
-```
+```text
 Fac-mon/
 ├── backend/                          # Spring Boot backend
 │   ├── src/main/java/com/factory/monitoring/
-│   │   ├── config/                   # CORS, WebSocket, DataInitializer configs
-│   │   ├── controller/               # REST API controllers
-│   │   ├── domain/                   # JPA entity classes
-│   │   ├── dto/                      # Data Transfer Objects
+│   │   ├── config/                   # CORS, Security, WebSocket, DataInitializer
+│   │   ├── controller/               # REST API (Auth, Machine, Profile, Alerts, etc.)
+│   │   ├── domain/                   # JPA entities (User, Machine, Alert, TelemetryLog)
 │   │   ├── exception/                # Global exception handling
 │   │   ├── repository/               # Spring Data JPA repositories
-│   │   ├── service/                  # Business logic interfaces
-│   │   │   └── impl/                 # Service implementations
+│   │   ├── service/                  # Business logic (RBAC, Telemetry, OTP, AI logic)
 │   │   └── websocket/                # WebSocket handler & telemetry simulator
-│   ├── src/main/resources/
-│   │   └── application.yml           # Application configuration
-│   └── pom.xml                       # Maven dependencies
+│   └── src/main/resources/           # App config (application.yml, application-prod.yml)
 │
 ├── frontend/                         # React + TypeScript frontend
 │   ├── src/
-│   │   ├── components/               # Reusable UI components
-│   │   │   ├── AlertCenter.tsx       # Real-time alert feed
-│   │   │   ├── KpiPanel.tsx          # KPI summary cards
-│   │   │   ├── MachineCard.tsx       # Individual machine card
-│   │   │   ├── MachineGrid.tsx       # Machine overview grid
-│   │   │   └── Navbar.tsx            # Navigation bar
-│   │   ├── views/                    # Page-level views
-│   │   │   ├── Dashboard.tsx         # Main dashboard page
-│   │   │   └── MachineDetailView.tsx # Machine detail page
+│   │   ├── components/               # UI components (ChatAssistant, FloorMap, RegisterModal)
+│   │   ├── views/                    # Views (Dashboard, Profile, Sustainability, Maintenance)
 │   │   ├── context/                  # React Context state management
-│   │   ├── hooks/                    # Custom hooks (WebSocket)
 │   │   ├── services/                 # API & WebSocket service clients
 │   │   ├── types/                    # TypeScript type definitions
 │   │   └── App.tsx                   # Root application component
-│   ├── package.json
-│   └── vite.config.ts
+│   └── package.json
 │
 ├── database/
 │   ├── docker-compose.yml            # MySQL Docker setup
-│   └── schema.sql                    # Database schema (3 tables)
+│   └── schema.sql                    # Initial database schema
 │
 ├── docs/
 │   └── ARCHITECTURE.md               # System architecture documentation
@@ -272,11 +246,13 @@ Fac-mon/
 
 ## 🗄️ Database Schema
 
-The system uses **3 core tables**:
+The system uses Several core tables to model the factory:
 
 | Table | Description |
 |-------|-------------|
-| `machines` | Machine registry with code, name, type, status, and location |
+| `users` & `user_roles`| User accounts, credentials, profiles, and RBAC mapping |
+| `otp_verifications` | One-Time Password tracking for secured actions |
+| `machines` | Machine registry with codes, types, statuses, and locations |
 | `telemetry_logs` | Time-series sensor data (temperature, vibration, pressure, power) |
 | `alerts` | Severity-based alerts with resolution tracking |
 

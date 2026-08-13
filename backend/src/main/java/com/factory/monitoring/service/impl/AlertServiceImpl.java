@@ -97,6 +97,12 @@ public class AlertServiceImpl implements AlertService {
     public long countActiveAlerts() {
         return alertRepository.countByResolvedFalse();
     }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public long countTotalAlerts() {
+        return alertRepository.count();
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -114,6 +120,10 @@ public class AlertServiceImpl implements AlertService {
                 .machineName(alert.getMachine().getName())
                 .message(alert.getMessage())
                 .severity(alert.getSeverity())
+                .alertType(alert.getAlertType())
+                .actualValue(alert.getActualValue())
+                .thresholdValue(alert.getThresholdValue())
+                .machineStatus(alert.getMachineStatus())
                 .resolved(alert.getResolved())
                 .timestamp(alert.getTimestamp())
                 .resolvedAt(alert.getResolvedAt())

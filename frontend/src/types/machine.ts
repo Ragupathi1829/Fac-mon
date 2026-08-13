@@ -21,6 +21,7 @@ export interface Machine {
   failureImpact?: string;
   productionLossRisk?: string;
   financialImpactPerHr?: string;
+  healthScore?: number;
 }
 
 export interface TelemetryLog {
@@ -44,6 +45,10 @@ export interface Alert {
   machineName: string;
   message: string;
   severity: AlertSeverity;
+  alertType?: string;
+  actualValue?: number;
+  thresholdValue?: number;
+  machineStatus?: string;
   resolved: boolean;
   timestamp: string;
   resolvedAt?: string;
@@ -93,7 +98,7 @@ export interface WsStatusSummary {
 
 export type WsMessage = WsTelemetryMessage | WsAlertMessage | WsStatusSummary;
 
-export type UserRole = 'FACTORY_OWNER' | 'PRODUCTION_MANAGER' | 'MAINTENANCE_ENGINEER' | 'MACHINE_OPERATOR' | 'QUALITY_INSPECTOR' | 'ADMIN';
+export type UserRole = 'ADMIN' | 'FACTORY_MANAGER' | 'MAINTENANCE_ENGINEER' | 'MACHINE_OPERATOR' | 'QUALITY_INSPECTOR';
 
 export interface EnrichedTelemetryLog extends TelemetryLog {
   voltage: number;

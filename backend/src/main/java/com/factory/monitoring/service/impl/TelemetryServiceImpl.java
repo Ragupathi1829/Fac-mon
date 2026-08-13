@@ -6,6 +6,7 @@ import com.factory.monitoring.dto.TelemetryLogDto;
 import com.factory.monitoring.exception.ResourceNotFoundException;
 import com.factory.monitoring.repository.MachineRepository;
 import com.factory.monitoring.repository.TelemetryLogRepository;
+import com.factory.monitoring.service.AlertEngineService;
 import com.factory.monitoring.service.TelemetryService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -20,11 +21,14 @@ public class TelemetryServiceImpl implements TelemetryService {
 
     private final TelemetryLogRepository telemetryLogRepository;
     private final MachineRepository machineRepository;
+    private final AlertEngineService alertEngineService;
 
     public TelemetryServiceImpl(TelemetryLogRepository telemetryLogRepository,
-                                MachineRepository machineRepository) {
+                                MachineRepository machineRepository,
+                                AlertEngineService alertEngineService) {
         this.telemetryLogRepository = telemetryLogRepository;
         this.machineRepository = machineRepository;
+        this.alertEngineService = alertEngineService;
     }
 
     @Override
@@ -43,6 +47,10 @@ public class TelemetryServiceImpl implements TelemetryService {
                 .build();
 
         TelemetryLog saved = telemetryLogRepository.save(log);
+        
+        // Evaluate logic via rules engine
+        alertEngineService.evaluateTelemetry(saved);
+        
         return toDto(saved);
     }
 

@@ -37,6 +37,13 @@ public class User {
     private String designation;
     private String phone;
     private String status; // ACTIVE, INACTIVE, SUSPENDED
+    private String factoryLocation;
+    
+    @Column(name = "email_verified")
+    private Boolean emailVerified;
+    
+    @Column(name = "mobile_verified")
+    private Boolean mobileVerified;
 
     @Column(name = "last_login")
     private LocalDateTime lastLogin;

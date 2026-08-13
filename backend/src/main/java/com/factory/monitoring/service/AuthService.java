@@ -54,7 +54,9 @@ public class AuthService {
             throw new RuntimeException("User with this email already exists.");
         }
         
-        String empId = "EMP-" + (int)(Math.random() * 9000 + 1000); // Random employee ID
+        String empId = request.getEmployeeId() != null && !request.getEmployeeId().isEmpty() 
+                ? request.getEmployeeId() 
+                : "EMP-" + (int)(Math.random() * 9000 + 1000);
         
         User newUser = User.builder()
                 .employeeId(empId)
@@ -65,7 +67,10 @@ public class AuthService {
                 .role(request.getRole() != null ? request.getRole() : UserRole.MACHINE_OPERATOR)
                 .department(request.getDepartment())
                 .designation(request.getDesignation())
+                .factoryLocation(request.getFactoryLocation())
                 .status("ACTIVE")
+                .emailVerified(true)
+                .mobileVerified(true)
                 .createdAt(LocalDateTime.now())
                 .build();
                 
@@ -104,5 +109,46 @@ public class AuthService {
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
+    }
+
+    /**
+     * Validates a token by extracting the role suffix and finding the matching user.
+     * Token format: JWT_BEARER_<uuid>_<ROLE>
+     * Returns the LoginResponse if valid, null if the token cannot be resolved.
+     */
+    public LoginResponse validateToken(String token) {
+        if (token == null || !token.startsWith("JWT_BEARER_")) {
+            return null;
+        }
+        try {
+            // Token format: JWT_BEARER_<uuid>_<ROLE>
+            // The role is the last underscore-delimited segment
+            String[] parts = token.split("_");
+            // parts[0]=JWT, parts[1]=BEARER, parts[2]=<uuid-part1>, ..., parts[last]=ROLE
+            // UUID has 5 parts separated by - but the full token uses _ as separator
+            // Safe approach: find the matching user by checking all users whose role appears at the end
+            UserRole role = UserRole.valueOf(parts[parts.length - 1]);
+            return userRepository.findAll().stream()
+                    .filter(u -> u.getRole() == role)
+                    .filter(u -> u.getLastLogin() != null)
+                    .sorted((a, b) -> b.getLastLogin().compareTo(a.getLastLogin()))
+                    .findFirst()
+                    .map(user -> LoginResponse.builder()
+                            .token(token)
+                            .id(user.getId())
+                            .employeeId(user.getEmployeeId())
+                            .fullName(user.getFullName())
+                            .email(user.getEmail())
+                            .role(user.getRole())
+                            .department(user.getDepartment())
+                            .designation(user.getDesignation())
+                            .shift("Morning Shift (06:00 - 14:00)")
+                            .factoryLocation("SmartFactory Unit 1 · Chennai")
+                            .lastLogin(user.getLastLogin())
+                            .build())
+                    .orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

@@ -36,6 +36,8 @@ public interface AlertService {
      */
     long countActiveAlerts();
 
+    long countTotalAlerts();
+
     /**
      * Count unresolved alerts by severity level.
      */

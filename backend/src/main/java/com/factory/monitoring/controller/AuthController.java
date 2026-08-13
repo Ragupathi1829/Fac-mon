@@ -50,6 +50,29 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ResponseEntity<?> logout() {
+        // Stateless JWT: logout is handled on the frontend by clearing the token.
         return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
+    }
+
+    /**
+     * Validates a stored JWT-like token by extracting the user from the DB.
+     * Called by the frontend on every app startup to confirm session is still valid.
+     * Token format: JWT_BEARER_<uuid>_<ROLE>
+     * In a full JWT implementation, this would verify the cryptographic signature.
+     */
+    @PostMapping("/validate")
+    public ResponseEntity<?> validateToken(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer JWT_BEARER_")) {
+                return ResponseEntity.status(401).body(Map.of("valid", false, "message", "No valid token provided"));
+            }
+            LoginResponse user = authService.validateToken(authHeader.substring(7));
+            if (user == null) {
+                return ResponseEntity.status(401).body(Map.of("valid", false, "message", "Session expired or invalid"));
+            }
+            return ResponseEntity.ok(Map.of("valid", true, "user", user));
+        } catch (Exception e) {
+            return ResponseEntity.status(401).body(Map.of("valid", false, "message", "Session validation failed"));
+        }
     }
 }

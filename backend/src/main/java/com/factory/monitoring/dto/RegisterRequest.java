@@ -16,4 +16,6 @@ public class RegisterRequest {
     private UserRole role;
     private String department;
     private String designation;
+    private String employeeId;
+    private String factoryLocation;
 }

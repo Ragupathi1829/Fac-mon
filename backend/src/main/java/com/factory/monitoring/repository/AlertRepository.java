@@ -21,10 +21,15 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
     long countByResolvedFalse();
 
     long countByResolvedFalseAndSeverity(String severity);
+    
+    long countByResolvedTrue();
 
     @Query("SELECT a FROM Alert a ORDER BY a.timestamp DESC")
     List<Alert> findAllRecent(Pageable pageable);
 
     @Query("SELECT a FROM Alert a WHERE a.machine.id = :machineId AND a.resolved = false ORDER BY a.timestamp DESC")
     List<Alert> findActiveByMachineId(@Param("machineId") Long machineId);
+    
+    @Query("SELECT a FROM Alert a WHERE a.machine.id = :machineId AND a.alertType = :alertType AND a.resolved = false")
+    List<Alert> findActiveByMachineIdAndAlertType(@Param("machineId") Long machineId, @Param("alertType") String alertType);
 }

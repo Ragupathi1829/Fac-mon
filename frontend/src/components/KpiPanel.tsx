@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { dashboardApi } from '../services/api';
+
 
 // SVG Icon components for a cleaner, premium look
 const GearIcon = () => (
@@ -119,23 +119,35 @@ const TiltCard: React.FC<TiltCardProps> = ({ className, glowColor, children }) =
 const KpiPanel: React.FC = () => {
   const { state, dispatch } = useApp();
 
-  const loadKpi = useCallback(async () => {
-    dispatch({ type: 'SET_LOADING', payload: { key: 'kpiLoading', value: true } });
-    try {
-      const kpi = await dashboardApi.getKpi();
-      dispatch({ type: 'SET_KPI', payload: kpi as any });
-    } catch (err) {
-      console.error('Failed to load KPI:', err);
-      dispatch({ type: 'SET_LOADING', payload: { key: 'kpiLoading', value: false } });
-    }
-  }, [dispatch]);
+  const calculateKpi = useCallback(() => {
+    const total = state.machines.length;
+    const running = state.machines.filter(m => m.status === 'RUNNING').length;
+    const idle = state.machines.filter(m => m.status === 'IDLE').length;
+    const stopped = state.machines.filter(m => m.status === 'STOPPED').length;
+    const error = state.machines.filter(m => m.status === 'ERROR').length;
+    
+    const activeAlerts = state.alerts.filter(a => !a.resolved);
+    const critical = activeAlerts.filter(a => a.severity === 'CRITICAL').length;
+    const warning = activeAlerts.filter(a => a.severity === 'WARNING').length;
+    
+    const oeePercent = total > 0 ? Math.round(((running * 0.95 + idle * 0.5) / total) * 100 * 10) / 10 : 0;
+    
+    dispatch({ type: 'SET_KPI', payload: {
+      totalMachines: total,
+      runningMachines: running,
+      idleMachines: idle,
+      stoppedMachines: stopped,
+      errorMachines: error,
+      activeAlerts: activeAlerts.length,
+      criticalAlerts: critical,
+      warningAlerts: warning,
+      oeePercent
+    }});
+  }, [state.machines, state.alerts, dispatch]);
 
   useEffect(() => {
-    loadKpi();
-    // Refresh KPI every 15 seconds
-    const interval = setInterval(loadKpi, 15000);
-    return () => clearInterval(interval);
-  }, [loadKpi]);
+    calculateKpi();
+  }, [calculateKpi]);
 
   const kpi = state.kpi;
 

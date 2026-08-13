@@ -128,7 +128,6 @@ function getStoredToken(): string | null {
   try {
     const user = localStorage.getItem('fac_mon_current_user');
     if (user) {
-      const parsed = JSON.parse(user);
       // The token is stored separately in app state; read from a parallel key if set
     }
   } catch (_e) { /* ignore */ }
@@ -294,12 +293,15 @@ export const alertApi = {
     localAlerts = localAlerts.map(a => a.id === alertId ? { ...a, resolved: true, resolvedAt: new Date().toISOString() } : a);
     return request<any>(`/alerts/${alertId}/resolve`, { method: 'PATCH' }, localAlerts.find(a => a.id === alertId));
   },
-  getCounts: () => {
+  getStats: () => {
     const active = localAlerts.filter(a => !a.resolved);
-    return request<Record<string, number>>('/alerts/counts', undefined, {
-      active: active.length,
-      critical: active.filter(a => a.severity === 'CRITICAL').length,
-      warning: active.filter(a => a.severity === 'WARNING').length,
+    return request<Record<string, number>>('/alerts/stats', undefined, {
+      totalAlerts: localAlerts.length,
+      unresolvedAlerts: active.length,
+      resolvedAlerts: localAlerts.length - active.length,
+      criticalAlerts: active.filter(a => a.severity === 'CRITICAL').length,
+      warningAlerts: active.filter(a => a.severity === 'WARNING').length,
+      infoAlerts: active.filter(a => a.severity === 'INFO').length,
     });
   },
 };

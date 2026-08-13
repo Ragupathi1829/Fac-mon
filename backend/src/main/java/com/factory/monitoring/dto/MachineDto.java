@@ -32,4 +32,6 @@ public class MachineDto {
 
     @Size(max = 100, message = "Location must not exceed 100 characters")
     private String location;
+
+    private Integer healthScore;
 }

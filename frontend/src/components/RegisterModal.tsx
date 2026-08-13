@@ -16,11 +16,13 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('+91 ');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [role, setRole] = useState<UserRole>('MACHINE_OPERATOR');
-  const [department, setDepartment] = useState('Production Ops');
-  const [designation, setDesignation] = useState('Machine Operator');
+  const [department, setDepartment] = useState('Production');
+  const [designation, setDesignation] = useState('Operator');
   const [shift, setShift] = useState('Morning Shift (06:00 - 14:00)');
-  const factoryLocation = 'SmartFactory Unit 1 · Chennai';
+  const [factoryLocation, setFactoryLocation] = useState('SmartFactory Unit 1 · Chennai');
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -43,8 +45,13 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email || !password || !phone || phone.trim() === '+91') {
-      setError('Please fill in all mandatory fields including Phone Number for OTP verification.');
+    if (!fullName || !email || !password || !phone || phone.trim() === '+91' || !employeeId) {
+      setError('Please fill in all mandatory fields including Employee ID and Phone Number.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
       return;
     }
 
@@ -190,7 +197,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
       
       const returnedUser = {
         id: res.userId || Date.now(),
-        employeeId: res.employeeId || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
+        employeeId: employeeId || res.employeeId || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
         fullName,
         email,
         phone,
@@ -254,9 +261,30 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label" style={{ fontSize: '0.78rem' }}>Security Password *</label>
-              <input className="form-input" type="password" placeholder="Create passkey" value={password} onChange={e => setPassword(e.target.value)} required />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: '0.78rem' }}>Employee ID *</label>
+                <input className="form-input" placeholder="e.g. EMP-1010" value={employeeId} onChange={e => setEmployeeId(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: '0.78rem' }}>Factory Location *</label>
+                <select className="form-select" value={factoryLocation} onChange={e => setFactoryLocation(e.target.value)} required>
+                  <option value="SmartFactory Unit 1 · Chennai">SmartFactory Unit 1 · Chennai</option>
+                  <option value="SmartFactory Unit 2 · Pune">SmartFactory Unit 2 · Pune</option>
+                  <option value="SmartFactory Unit 3 · Bangalore">SmartFactory Unit 3 · Bangalore</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: '0.78rem' }}>Security Password *</label>
+                <input className="form-input" type="password" placeholder="Create passkey" value={password} onChange={e => setPassword(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: '0.78rem' }}>Confirm Password *</label>
+                <input className="form-input" type="password" placeholder="Re-enter passkey" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required />
+              </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
@@ -272,15 +300,40 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: '0.78rem' }}>Department</label>
-                <input className="form-input" value={department} onChange={e => setDepartment(e.target.value)} />
+                <label className="form-label" style={{ fontSize: '0.78rem' }}>Department *</label>
+                <select className="form-select" value={department} onChange={e => setDepartment(e.target.value)} required>
+                  <option value="Administration">Administration</option>
+                  <option value="Production">Production</option>
+                  <option value="Maintenance">Maintenance</option>
+                  <option value="Engineering">Engineering</option>
+                  <option value="Quality Control">Quality Control</option>
+                  <option value="Safety">Safety</option>
+                  <option value="Sustainability">Sustainability</option>
+                  <option value="Human Resources">Human Resources</option>
+                  <option value="IT">IT</option>
+                  <option value="Operations">Operations</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: '0.78rem' }}>Job Title</label>
-                <input className="form-input" value={designation} onChange={e => setDesignation(e.target.value)} />
+                <label className="form-label" style={{ fontSize: '0.78rem' }}>Designation *</label>
+                <select className="form-select" value={designation} onChange={e => setDesignation(e.target.value)} required>
+                  <option value="Factory Administrator">Factory Administrator</option>
+                  <option value="Plant Manager">Plant Manager</option>
+                  <option value="Production Manager">Production Manager</option>
+                  <option value="Maintenance Manager">Maintenance Manager</option>
+                  <option value="Shift Supervisor">Shift Supervisor</option>
+                  <option value="Engineer">Engineer</option>
+                  <option value="Technician">Technician</option>
+                  <option value="Operator">Operator</option>
+                  <option value="Safety Officer">Safety Officer</option>
+                  <option value="Sustainability Manager">Sustainability Manager</option>
+                  <option value="HR Manager">HR Manager</option>
+                  <option value="Other">Other</option>
+                </select>
               </div>
 
               <div className="form-group">

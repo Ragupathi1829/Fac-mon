@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useCallback } from 'react';
 import type { Machine, Alert, KpiData, TelemetryLog, WsMessage, UserRole, EnrichedTelemetryLog, Worker, InventoryItem, MaintenanceRecord, FactoryDoc } from '../types/machine';
+import toast from 'react-hot-toast';
 
 // ─── State Shape ─────────────────────────────────────────────────────────────
 
@@ -33,6 +34,7 @@ interface AppState {
   kpiLoading: boolean;
   
   // SmartFactory 360 Specific State
+  authChecking: boolean;
   currentUser: UserProfile | null;
   token: string | null;
   activeRole: UserRole;
@@ -112,6 +114,7 @@ const initialState: AppState = {
   machinesLoading: false,
   alertsLoading: false,
   kpiLoading: false,
+  authChecking: true,
   currentUser: getSavedUser(),
   token: localStorage.getItem('fac_mon_token'),
   activeRole: 'ADMIN',
@@ -130,6 +133,8 @@ type Action =
   | { type: 'UPDATE_USER_PROFILE'; payload: Partial<UserProfile> }
   | { type: 'SET_PROFILE_TAB'; payload: 'personal' | 'employment' | 'factory' | 'security' | 'activity' | 'notifications' | 'settings' }
   | { type: 'LOGOUT' }
+  | { type: 'SET_AUTH_CHECKING'; payload: boolean }
+  | { type: 'CLEAR_AUTH' }
   | { type: 'SET_MACHINES'; payload: Machine[] }
   | { type: 'SET_ALERTS'; payload: Alert[] }
   | { type: 'SET_KPI'; payload: KpiData }
@@ -243,13 +248,22 @@ function reducer(state: AppState, action: Action): AppState {
       };
     }
 
-    case 'LOGOUT': {
+    case 'LOGOUT':
+    case 'CLEAR_AUTH': {
       localStorage.removeItem(STORAGE_KEY_USER);
       localStorage.removeItem('fac_mon_token');
       return {
         ...state,
         currentUser: null,
         token: null,
+        authChecking: false,
+      };
+    }
+
+    case 'SET_AUTH_CHECKING': {
+      return {
+        ...state,
+        authChecking: action.payload,
       };
     }
 
@@ -376,6 +390,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       case 'ALERT':
         dispatch({ type: 'ADD_ALERT', payload: msg });
+        if (msg.severity === 'CRITICAL') {
+          toast.error(`CRITICAL ALERT: ${msg.message}`);
+        } else if (msg.severity === 'WARNING') {
+          toast(`WARNING: ${msg.message}`, { icon: '⚠️' });
+        } else if (msg.resolved) {
+          toast.success(`RESOLVED: ${msg.message}`);
+        }
         break;
 
       case 'STATUS_SUMMARY':
@@ -383,39 +404,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Continuous IoT Sensor Simulation Loop (emits telemetry for every machine)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      state.machines.forEach(machine => {
-        const isRunning = machine.status === 'RUNNING';
-        const isError = machine.status === 'ERROR';
-
-        // Physics sensor calculations
-        const baseTemp = isError ? 94 : isRunning ? 68 + (Math.random() * 8) : 25;
-        const baseVib = isError ? 9.2 : isRunning ? 3.5 + (Math.random() * 2) : 0.2;
-        const basePress = isRunning ? 6.5 + (Math.random() * 1.5) : 0.5;
-        const basePower = isRunning ? 45 + (Math.random() * 20) : 2.5;
-
-        const rawTelemetry: TelemetryLog = {
-          id: Date.now() + machine.id,
-          machineId: machine.id,
-          machineCode: machine.machineCode,
-          machineName: machine.name,
-          temperature: Math.round(baseTemp * 10) / 10,
-          vibration: Math.round(baseVib * 10) / 10,
-          pressure: Math.round(basePress * 10) / 10,
-          powerConsumption: Math.round(basePower * 10) / 10,
-          timestamp: new Date().toISOString(),
-        };
-
-        const enriched = enrichTelemetry(rawTelemetry, machine.status);
-        dispatch({ type: 'SET_TELEMETRY', payload: enriched });
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [state.machines]);
-
+  // (Frontend simulation loop was removed because the backend TelemetrySimulator now provides true real-time websocket data)
+  
   return (
     <AppContext.Provider value={{ state, dispatch, handleWsMessage }}>
       {children}

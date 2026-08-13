@@ -12,7 +12,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "alerts", indexes = {
         @Index(name = "idx_alert_machine_id", columnList = "machine_id"),
-        @Index(name = "idx_alert_resolved", columnList = "resolved")
+        @Index(name = "idx_alert_resolved", columnList = "resolved"),
+        @Index(name = "idx_alert_type", columnList = "alert_type")
 })
 @Getter
 @Setter
@@ -34,6 +35,18 @@ public class Alert {
 
     @Column(nullable = false, length = 20)
     private String severity; // INFO, WARNING, CRITICAL
+
+    @Column(name = "alert_type", length = 50)
+    private String alertType; // TEMPERATURE, VIBRATION, PRESSURE, POWER
+
+    @Column(name = "actual_value")
+    private Double actualValue;
+
+    @Column(name = "threshold_value")
+    private Double thresholdValue;
+
+    @Column(name = "machine_status", length = 20)
+    private String machineStatus;
 
     @Column(nullable = false)
     private Boolean resolved;
