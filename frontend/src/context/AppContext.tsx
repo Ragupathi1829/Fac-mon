@@ -115,8 +115,10 @@ const initialState: AppState = {
   alertsLoading: false,
   kpiLoading: false,
   authChecking: true,
-  currentUser: getSavedUser(),
-  token: localStorage.getItem('fac_mon_token'),
+  // Always start null — AuthGate will restore session after validating the
+  // stored token. This ensures the app never bypasses the login screen.
+  currentUser: null,
+  token: null,
   activeRole: 'ADMIN',
   profileActiveTab: 'personal',
   workers: initialWorkers,

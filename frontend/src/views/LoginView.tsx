@@ -188,8 +188,36 @@ const SignInPanel: React.FC<{ onForgot: () => void; onRegister: () => void }> = 
         case 'MACHINE_OPERATOR':     navigate('/machines/1'); break;
         default:                     navigate('/');
       }
-    } catch (err: any) {
-      setError(err.message || 'Login failed. Invalid credentials.');
+    } catch {
+      // ── Offline / demo fallback ──────────────────────────────────────────
+      // Backend is unreachable. Try matching against built-in preset credentials.
+      const preset = ROLE_PRESETS.find(p => p.email === email && p.pass === password);
+      if (preset) {
+        dispatch({
+          type: 'SET_USER_SESSION',
+          payload: {
+            token: `JWT_DEMO_${preset.role}`,
+            user: {
+              id: Math.floor(1000 + Math.random() * 9000),
+              employeeId: `EMP-DEMO`,
+              fullName: preset.label.replace(/^[^\s]+\s/, ''), // strip emoji
+              email: preset.email,
+              role: preset.role,
+              department: 'Demo Department',
+              designation: preset.label,
+              shift: 'MORNING',
+              factoryLocation: 'Plant A',
+            },
+          },
+        });
+        switch (preset.role) {
+          case 'MAINTENANCE_ENGINEER': navigate('/machines'); break;
+          case 'MACHINE_OPERATOR':     navigate('/machines/1'); break;
+          default:                     navigate('/');
+        }
+      } else {
+        setError('Login failed. Check your credentials or use a demo preset above.');
+      }
     } finally {
       setLoading(false);
     }
@@ -342,21 +370,27 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
       const data = await res.json();
       if (res.ok && data.success) {
         setMaskedPhone(data.phone || phone);
+        // ✅ Only advance to OTP step on success
+        setStep('OTP');
+        setOtpTimer(60);
+        setOtp(['', '', '', '', '', '']);
       } else {
-        setError(data.message || 'Failed to send OTP.');
-        return;
+        // Backend rejected (e.g. 30-second cooldown, invalid phone)
+        setError(data.message || 'Failed to send OTP. Please try again.');
       }
     } catch {
+      // Backend offline — generate a local dev OTP
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       (window as any).__devOtp = code;
       setMaskedPhone(phone);
       console.log(`[DEV] OTP: ${code}`);
+      // Still advance to OTP step in offline/dev mode
+      setStep('OTP');
+      setOtpTimer(60);
+      setOtp(['', '', '', '', '', '']);
     } finally {
       setLoading(false);
     }
-    setStep('OTP');
-    setOtpTimer(60);
-    setOtp(['', '', '', '', '', '']);
   };
 
   const handleResend = async () => {
@@ -425,6 +459,9 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
           safetyTraining: true, performanceScore: 100,
         },
       });
+      // Mark that this device has successfully registered at least once.
+      // This ensures returning users always land on the Sign In tab.
+      localStorage.setItem('fac_mon_has_registered', 'true');
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -925,8 +962,19 @@ const ForgotPasswordPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) =
 
 type AuthTab = 'signin' | 'register' | 'forgot';
 
+/**
+ * Determine the initial tab to show:
+ * - New visitor (no account ever created on this device) → 'register'
+ * - Returning user (has a saved session OR has registered before) → 'signin'
+ */
+function getInitialTab(): AuthTab {
+  const hasSession    = !!localStorage.getItem('fac_mon_current_user');
+  const hasRegistered = !!localStorage.getItem('fac_mon_has_registered');
+  return hasSession || hasRegistered ? 'signin' : 'register';
+}
+
 const LoginView: React.FC = () => {
-  const [tab, setTab] = useState<AuthTab>('signin');
+  const [tab, setTab] = useState<AuthTab>(getInitialTab);
 
   // Reset to top of card on tab switch
   const cardRef = useRef<HTMLDivElement>(null);

@@ -189,21 +189,9 @@ const AuthGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         }
       })
       .catch(() => {
-        // Backend offline → fall back to stored user (demo/offline mode)
-        try {
-          const parsed = JSON.parse(savedUser);
-          if (parsed && parsed.fullName && token) {
-            // Restore session from localStorage when backend is unreachable
-            dispatch({
-              type: 'SET_USER_SESSION',
-              payload: { token, user: parsed },
-            });
-          } else {
-            dispatch({ type: 'CLEAR_AUTH' });
-          }
-        } catch {
-          dispatch({ type: 'CLEAR_AUTH' });
-        }
+        // Backend offline → clear auth and require the user to log in manually.
+        // This prevents the app from silently bypassing the login screen.
+        dispatch({ type: 'CLEAR_AUTH' });
       })
       .finally(() => {
         dispatch({ type: 'SET_AUTH_CHECKING', payload: false });
