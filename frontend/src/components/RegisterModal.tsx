@@ -8,8 +8,6 @@ interface RegisterModalProps {
   onSuccess: (userData: any) => void;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-
 const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [step, setStep] = useState<'DETAILS' | 'OTP'>('DETAILS');
   const [fullName, setFullName] = useState('');
@@ -43,10 +41,19 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
 
   if (!isOpen) return null;
 
+  const maskPhoneNumber = (raw: string) => {
+    const cleaned = raw.replace(/\D/g, '');
+    if (cleaned.length >= 4) {
+      return '+91 ******' + cleaned.slice(-4);
+    }
+    return raw;
+  };
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email || !password || !phone || phone.trim() === '+91' || !employeeId) {
-      setError('Please fill in all mandatory fields including Employee ID and Phone Number.');
+    const digitsOnly = phone.replace(/\D/g, '');
+    if (!fullName || !email || !password || digitsOnly.length < 10 || !employeeId) {
+      setError('Please fill in all mandatory fields with a valid 10-digit phone number.');
       return;
     }
 
@@ -59,46 +66,33 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/otp/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim() }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
+      const res = await authApi.sendOtp(phone.trim());
+      if (res.success) {
         setStep('OTP');
         setOtpTimer(60);
         setUserOtp(['', '', '', '', '', '']);
-        setMaskedPhone(data.phone || phone);
-        setOtpNotice(`📱 OTP sent to ${data.phone || phone}. Valid for 5 minutes.`);
+        setMaskedPhone(maskPhoneNumber(phone.trim()));
+        setOtpNotice(`📱 OTP sent to ${maskPhoneNumber(phone.trim())}. Valid for 5 minutes.`);
       } else {
-        setError(data.message || 'Failed to send OTP. Please try again.');
+        setError(res.message || 'Failed to send OTP. Please try again.');
       }
-    } catch (err) {
-      // Backend offline → graceful fallback to demo mode
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      (window as any).__devOtp = code; // store on window for manual testing
-      setStep('OTP');
-      setOtpTimer(60);
-      setUserOtp(['', '', '', '', '', '']);
-      setMaskedPhone(phone);
-      setOtpNotice(`📱 OTP sent to ${phone}. Valid for 5 minutes.`);
-      console.log(`[DEV-FALLBACK] Backend offline. OTP: ${code}`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP. Please try again.');
     } finally {
       setIsSending(false);
     }
   };
 
   const handleOtpChange = (index: number, value: string) => {
-    if (value.length > 1) value = value.charAt(value.length - 1);
+    const cleaned = value.replace(/\D/g, '');
+    if (!cleaned && value !== '') return;
+    const char = cleaned.length > 0 ? cleaned.charAt(cleaned.length - 1) : '';
     const newOtp = [...userOtp];
-    newOtp[index] = value;
+    newOtp[index] = char;
     setUserOtp(newOtp);
 
     // Auto-focus next input field
-    if (value && index < 5) {
+    if (char && index < 5) {
       const nextInput = document.getElementById(`otp-input-${index + 1}`);
       nextInput?.focus();
     }
@@ -111,30 +105,35 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
     }
   };
 
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '');
+    if (!pasted) return;
+    const digits = pasted.slice(0, 6).split('');
+    const newOtp = [...userOtp];
+    for (let i = 0; i < 6; i++) {
+      newOtp[i] = digits[i] || '';
+    }
+    setUserOtp(newOtp);
+    const target = Math.min(digits.length, 5);
+    document.getElementById(`otp-input-${target}`)?.focus();
+  };
+
   const handleResendOtp = async () => {
+    if (otpTimer > 0 || isSending) return;
     setIsSending(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/otp/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim() }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const res = await authApi.sendOtp(phone.trim());
+      if (res.success) {
         setOtpTimer(60);
         setUserOtp(['', '', '', '', '', '']);
-        setOtpNotice(`📱 New OTP sent to ${data.phone || phone}. Valid for 5 minutes.`);
+        setOtpNotice(`📱 New OTP sent to ${maskPhoneNumber(phone.trim())}. Valid for 5 minutes.`);
       } else {
-        setError(data.message || 'Failed to resend OTP.');
+        setError(res.message || 'Failed to resend OTP.');
       }
-    } catch {
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      (window as any).__devOtp = code;
-      setOtpTimer(60);
-      setUserOtp(['', '', '', '', '', '']);
-      setOtpNotice(`📱 New OTP sent to ${phone}. Valid for 5 minutes.`);
-      console.log(`[DEV-FALLBACK] Resent OTP: ${code}`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend OTP.');
     } finally {
       setIsSending(false);
     }
@@ -153,27 +152,14 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/otp/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim(), code: enteredCode }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
+      const res = await authApi.verifyOtp(phone.trim(), enteredCode);
+      if (res.success) {
         completeRegistration();
       } else {
-        setError(data.message || 'Invalid OTP. Please try again.');
+        setError(res.message || 'Invalid OTP. Please try again.');
       }
-    } catch {
-      // Backend offline → dev fallback: accept dev OTP or 123456
-      const devOtp = (window as any).__devOtp;
-      if (enteredCode === devOtp || enteredCode === '123456') {
-        completeRegistration();
-      } else {
-        setError('[Dev fallback] Invalid OTP. Use 123456 when backend is offline.');
-      }
+    } catch (err: any) {
+      setError(err.message || 'Incorrect OTP. Please try again.');
     } finally {
       setIsVerifying(false);
     }
@@ -188,6 +174,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
       role,
       department,
       designation,
+      factoryLocation,
     };
     
     setIsVerifying(true);
@@ -196,7 +183,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
       const res = await authApi.register(newUser);
       
       const returnedUser = {
-        id: res.userId || Date.now(),
+        id: res.userId || res.id || Date.now(),
         employeeId: employeeId || res.employeeId || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
         fullName,
         email,
@@ -400,10 +387,14 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSucces
                     id={`otp-input-${idx}`}
                     type="text"
                     inputMode="numeric"
+                    pattern="[0-9]*"
+                    autoComplete="one-time-code"
                     maxLength={1}
                     value={digit}
                     onChange={e => handleOtpChange(idx, e.target.value)}
                     onKeyDown={e => handleOtpKeyDown(idx, e)}
+                    onPaste={handleOtpPaste}
+                    aria-label={`OTP Digit ${idx + 1}`}
                     style={{
                       width: '46px',
                       height: '54px',

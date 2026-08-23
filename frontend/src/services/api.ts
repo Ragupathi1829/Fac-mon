@@ -280,6 +280,58 @@ export const authApi = {
         employeeId: `EMP-${Math.floor(1000 + Math.random() * 9000)}`
       };
     }
+  },
+  sendOtp: async (phoneNumber: string) => {
+    try {
+      const res = await fetch(`${BASE_URL}/auth/otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || 'Failed to send OTP. Please try again.');
+      }
+      return data;
+    } catch (e: any) {
+      if (e.message && e.message !== 'Failed to fetch' && !e.message.includes('NetworkError')) {
+        throw e;
+      }
+      if (!USE_MOCKS) throw new Error('Unable to connect to the server.');
+      
+      // Fallback in demo mode
+      console.log(`[DEV ONLY] OTP requested for testing: ${phoneNumber}`);
+      return { success: true, message: "OTP sent successfully (Demo Mode)", expiresIn: 300 };
+    }
+  },
+  verifyOtp: async (phoneNumber: string, otp: string) => {
+    try {
+      const res = await fetch(`${BASE_URL}/auth/otp/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber, otp }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || 'Incorrect OTP. Please try again.');
+      }
+      return data;
+    } catch (e: any) {
+      if (e.message && e.message !== 'Failed to fetch' && !e.message.includes('NetworkError')) {
+        throw e;
+      }
+      if (!USE_MOCKS) throw new Error('Unable to connect to the server.');
+      
+      // Fallback for offline demo mode
+      if (otp === '123456') {
+        return {
+           success: true,
+           requiresRegistration: true,
+           message: "Phone number verified. Please complete your registration."
+        };
+      }
+      throw new Error("Incorrect OTP. Please try again.");
+    }
   }
 };
 

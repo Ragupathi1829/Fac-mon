@@ -1,4 +1,8 @@
-# This file is for local development only — DO NOT commit to git
-spring:
-  datasource:
-    password: Ragu@1829
+# Local Development Profile
+# Active when spring.profiles.active=local
+# No real SMS is sent.
+
+twilio:
+  account-sid: ""
+  auth-token: ""
+  phone-number: ""

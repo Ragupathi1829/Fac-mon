@@ -2,21 +2,19 @@ package com.factory.monitoring.service;
 
 import com.factory.monitoring.domain.OtpVerification;
 import com.factory.monitoring.repository.OtpVerificationRepository;
-import com.twilio.Twilio;
-import com.twilio.rest.api.v2010.account.Message;
-import com.twilio.type.PhoneNumber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -24,133 +22,152 @@ public class OtpService {
 
     private static final Logger log = LoggerFactory.getLogger(OtpService.class);
     private final OtpVerificationRepository otpVerificationRepository;
-    private final java.security.SecureRandom random = new java.security.SecureRandom();
+    private final SmsService smsService;
+    private final SecureRandom random = new SecureRandom();
 
-    @Value("${twilio.enabled:false}")
-    private boolean twilioEnabled;
+    @Value("${otp.expiration-minutes:5}")
+    private int expirationMinutes;
 
-    @Value("${twilio.account-sid:}")
-    private String twilioAccountSid;
+    @Value("${otp.max-attempts:5}")
+    private int maxAttempts;
 
-    @Value("${twilio.auth-token:}")
-    private String twilioAuthToken;
+    @Value("${otp.resend-cooldown-seconds:60}")
+    private int resendCooldownSeconds;
 
-    @Value("${twilio.phone-number:}")
-    private String twilioPhoneNumber;
+    @Value("${otp.max-requests-per-hour:5}")
+    private int maxRequestsPerHour;
 
-    public OtpService(OtpVerificationRepository otpVerificationRepository) {
+    public OtpService(OtpVerificationRepository otpVerificationRepository, SmsService smsService) {
         this.otpVerificationRepository = otpVerificationRepository;
+        this.smsService = smsService;
     }
 
-    /** Initialize Twilio SDK once on startup if enabled */
-    @PostConstruct
-    public void initTwilio() {
-        if (twilioEnabled) {
-            Twilio.init(twilioAccountSid, twilioAuthToken);
-            log.info("✅ Twilio SMS initialized — real OTPs will be sent via SMS.");
-        } else {
-            log.info("ℹ️  Twilio disabled — OTPs will be printed to console (dev mode).");
+    /**
+     * Normalizes and validates Indian phone numbers.
+     * Accepts formats: 9876543210, +919876543210, 919876543210, 09876543210
+     * Outputs: +919876543210
+     */
+    public String normalizePhone(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new IllegalArgumentException("Phone number is required.");
         }
+        String cleaned = phone.replaceAll("[^0-9]", "");
+        if (cleaned.startsWith("91") && cleaned.length() == 12) {
+            cleaned = cleaned.substring(2);
+        } else if (cleaned.startsWith("0") && cleaned.length() == 11) {
+            cleaned = cleaned.substring(1);
+        }
+        if (cleaned.length() != 10 || !cleaned.matches("^[6-9]\\d{9}$")) {
+            throw new IllegalArgumentException("Invalid mobile number. Please provide a valid 10-digit Indian phone number.");
+        }
+        return "+91" + cleaned;
     }
 
     @Transactional
-    public String generateAndSendOtp(String contact, OtpVerification.OtpType type) {
-        // Check for 30 seconds resend cooldown
+    public String generateAndSendOtp(String contact, OtpVerification.OtpType type, OtpVerification.OtpPurpose purpose) {
+        String normalizedContact = type == OtpVerification.OtpType.MOBILE ? normalizePhone(contact) : contact;
+
+        // Rate limit: Max requests per hour
+        int requestsLastHour = otpVerificationRepository.countByContactAndCreatedAtAfter(
+                normalizedContact, LocalDateTime.now().minusHours(1));
+        
+        if (requestsLastHour >= maxRequestsPerHour) {
+            log.warn("Rate limit exceeded for contact: {}", maskContact(normalizedContact));
+            throw new RuntimeException("Too many OTP requests. Please try again later.");
+        }
+
+        // Check for resend cooldown
         Optional<OtpVerification> latestOtpOpt = otpVerificationRepository
-                .findTopByContactAndTypeOrderByCreatedAtDesc(contact, type);
+                .findTopByContactAndTypeAndPurposeOrderByCreatedAtDesc(normalizedContact, type, purpose);
 
         if (latestOtpOpt.isPresent()) {
             OtpVerification latestOtp = latestOtpOpt.get();
-            if (!latestOtp.isVerified() &&
-                    ChronoUnit.SECONDS.between(latestOtp.getCreatedAt(), LocalDateTime.now()) < 30) {
-                throw new RuntimeException("Please wait at least 30 seconds before requesting a new OTP.");
+            long secondsSinceLast = ChronoUnit.SECONDS.between(latestOtp.getCreatedAt(), LocalDateTime.now());
+            if (!latestOtp.isVerified() && secondsSinceLast < resendCooldownSeconds) {
+                long waitRemaining = resendCooldownSeconds - secondsSinceLast;
+                throw new RuntimeException("Please wait " + waitRemaining + " seconds before requesting a new OTP.");
             }
         }
 
-        // Invalidate old unverified OTPs
-        java.util.List<OtpVerification> oldOtps =
-                otpVerificationRepository.findByContactAndTypeAndVerifiedFalse(contact, type);
+        // Invalidate previous unverified OTPs
+        List<OtpVerification> oldOtps =
+                otpVerificationRepository.findByContactAndTypeAndPurposeAndVerifiedFalse(normalizedContact, type, purpose);
         for (OtpVerification oldOtp : oldOtps) {
             oldOtp.setVerified(true);
         }
         otpVerificationRepository.saveAll(oldOtps);
 
-        // Generate 6-digit OTP
+        // Generate 6-digit OTP using SecureRandom (000000 - 999999)
         String otp = String.format("%06d", random.nextInt(1000000));
 
-        // Hash OTP with contact as salt (never store plain OTP)
-        String otpHash = hashOtp(contact, otp);
+        // Hash OTP with salt (contact)
+        String otpHash = hashOtp(normalizedContact, otp);
 
         OtpVerification otpVerification = OtpVerification.builder()
-                .contact(contact)
+                .contact(normalizedContact)
                 .otpHash(otpHash)
                 .type(type)
-                .expiresAt(LocalDateTime.now().plusMinutes(5))
+                .purpose(purpose)
+                .expiresAt(LocalDateTime.now().plusMinutes(expirationMinutes))
                 .attempts(0)
                 .verified(false)
                 .build();
 
         otpVerificationRepository.save(otpVerification);
 
-        if (twilioEnabled) {
-            // ── PRODUCTION: Send real SMS via Twilio ─────────────────────────
-            try {
-                Message message = Message.creator(
-                        new PhoneNumber(contact),
-                        new PhoneNumber(twilioPhoneNumber),
-                        "SmartFactory 360 — Your OTP is: " + otp + ". Valid for 5 minutes. Do not share."
-                ).create();
-                log.info("SMS sent to {} via Twilio. SID: {}", contact, message.getSid());
-            } catch (Exception e) {
-                log.error("❌ Failed to send SMS via Twilio: {}", e.getMessage());
-                throw new RuntimeException("SMS delivery failed. Please try again.");
-            }
+        // Send OTP via SmsService
+        if (type == OtpVerification.OtpType.MOBILE) {
+            smsService.sendOtp(normalizedContact, otp);
         } else {
-            // ── DEV MODE: Print OTP to console ───────────────────────────────
-            System.out.println("====================================");
-            System.out.println("        OTP DEVELOPMENT MODE        ");
-            System.out.println("====================================");
-            System.out.println("Type    : " + type.name());
-            System.out.println("Contact : " + contact);
-            System.out.println("OTP     : " + otp);
-            System.out.println("Expires : 5 minutes");
-            System.out.println("====================================");
+            log.warn("Email OTP not yet implemented for {}", maskContact(normalizedContact));
         }
 
         return "OTP sent successfully";
     }
 
     @Transactional
-    public boolean verifyOtp(String contact, String otp, OtpVerification.OtpType type) {
+    public boolean verifyOtp(String contact, String otp, OtpVerification.OtpType type, OtpVerification.OtpPurpose purpose) {
+        String normalizedContact = type == OtpVerification.OtpType.MOBILE ? normalizePhone(contact) : contact;
+
         Optional<OtpVerification> otpOpt = otpVerificationRepository
-                .findTopByContactAndTypeOrderByCreatedAtDesc(contact, type);
+                .findTopByContactAndTypeAndPurposeOrderByCreatedAtDesc(normalizedContact, type, purpose);
 
         if (otpOpt.isEmpty()) {
-            return false;
+            throw new RuntimeException("No OTP requested for this phone number.");
         }
 
         OtpVerification otpVerification = otpOpt.get();
 
         if (otpVerification.isVerified()) {
-            return false; // already verified
+            throw new RuntimeException("This OTP has already been used or invalidated. Please request a new OTP.");
         }
 
-        if (otpVerification.getAttempts() >= 5) {
-            return false; // max attempts reached
+        if (otpVerification.getAttempts() >= maxAttempts) {
+            otpVerification.setVerified(true);
+            otpVerificationRepository.save(otpVerification);
+            throw new RuntimeException("Too many incorrect attempts. Please request a new OTP.");
         }
 
         otpVerification.setAttempts(otpVerification.getAttempts() + 1);
 
         if (LocalDateTime.now().isAfter(otpVerification.getExpiresAt())) {
+            otpVerification.setVerified(true);
             otpVerificationRepository.save(otpVerification);
-            return false; // expired
+            throw new RuntimeException("This OTP has expired. Please request a new OTP.");
         }
 
-        if (!hashOtp(contact, otp).equals(otpVerification.getOtpHash())) {
+        String computedHash = hashOtp(normalizedContact, otp);
+        if (!computedHash.equals(otpVerification.getOtpHash())) {
+            if (otpVerification.getAttempts() >= maxAttempts) {
+                otpVerification.setVerified(true);
+                otpVerificationRepository.save(otpVerification);
+                throw new RuntimeException("Too many incorrect attempts. Please request a new OTP.");
+            }
             otpVerificationRepository.save(otpVerification);
-            return false; // invalid otp
+            throw new RuntimeException("Incorrect OTP. Please try again.");
         }
 
+        // Successfully verified
         otpVerification.setVerified(true);
         otpVerificationRepository.save(otpVerification);
 
@@ -170,5 +187,13 @@ public class OtpService {
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("Error hashing OTP", e);
         }
+    }
+
+    private String maskContact(String contact) {
+        if (contact == null) return "";
+        if (contact.length() > 4) {
+            return "******" + contact.substring(contact.length() - 4);
+        }
+        return "******";
     }
 }

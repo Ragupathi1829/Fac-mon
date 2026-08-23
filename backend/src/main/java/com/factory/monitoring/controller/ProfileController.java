@@ -81,7 +81,7 @@ public class ProfileController {
             return ResponseEntity.badRequest().body(Map.of("message", "Mobile number is required"));
         }
         try {
-            otpService.generateAndSendOtp(request.getMobile(), OtpVerification.OtpType.MOBILE);
+            otpService.generateAndSendOtp(request.getMobile(), OtpVerification.OtpType.MOBILE, OtpVerification.OtpPurpose.LOGIN);
             return ResponseEntity.ok(Map.of("message", "OTP sent successfully", "expiresIn", 300));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
@@ -90,7 +90,7 @@ public class ProfileController {
 
     @PostMapping("/verify-mobile-otp")
     public ResponseEntity<?> verifyMobileOtp(@Valid @RequestBody OtpVerifyRequest request) {
-        boolean verified = otpService.verifyOtp(request.getMobile(), request.getOtp(), OtpVerification.OtpType.MOBILE);
+        boolean verified = otpService.verifyOtp(request.getMobile(), request.getOtp(), OtpVerification.OtpType.MOBILE, OtpVerification.OtpPurpose.LOGIN);
         if (verified) {
             return ResponseEntity.ok(Map.of("verified", true, "message", "Mobile number verified successfully"));
         } else {
@@ -104,7 +104,7 @@ public class ProfileController {
             return ResponseEntity.badRequest().body(Map.of("message", "Email is required"));
         }
         try {
-            otpService.generateAndSendOtp(request.getEmail(), OtpVerification.OtpType.EMAIL);
+            otpService.generateAndSendOtp(request.getEmail(), OtpVerification.OtpType.EMAIL, OtpVerification.OtpPurpose.LOGIN);
             return ResponseEntity.ok(Map.of("message", "OTP sent successfully", "expiresIn", 300));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
@@ -113,7 +113,7 @@ public class ProfileController {
 
     @PostMapping("/verify-email-otp")
     public ResponseEntity<?> verifyEmailOtp(@Valid @RequestBody OtpVerifyRequest request) {
-        boolean verified = otpService.verifyOtp(request.getEmail(), request.getOtp(), OtpVerification.OtpType.EMAIL);
+        boolean verified = otpService.verifyOtp(request.getEmail(), request.getOtp(), OtpVerification.OtpType.EMAIL, OtpVerification.OtpPurpose.LOGIN);
         if (verified) {
             return ResponseEntity.ok(Map.of("verified", true, "message", "Email verified successfully"));
         } else {

@@ -39,35 +39,90 @@ function getPasswordStrength(pw: string): { level: 0 | 1 | 2 | 3; label: string 
 
 // ─── OTP Input Group ──────────────────────────────────────────────────────────
 
-const OtpInputs: React.FC<{
+interface OtpInputsProps {
   value: string[];
   onChange: (v: string[]) => void;
-}> = ({ value, onChange }) => {
-  const handleChange = (i: number, v: string) => {
-    if (v.length > 1) v = v.charAt(v.length - 1);
+  onComplete?: (code: string) => void;
+  disabled?: boolean;
+}
+
+const OtpInputs: React.FC<OtpInputsProps> = ({ value, onChange, onComplete, disabled }) => {
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleChange = (i: number, val: string) => {
+    // Only accept numeric digits
+    const cleaned = val.replace(/\D/g, '');
+    if (!cleaned && val !== '') return;
+
+    const char = cleaned.length > 0 ? cleaned.charAt(cleaned.length - 1) : '';
     const next = [...value];
-    next[i] = v;
+    next[i] = char;
     onChange(next);
-    if (v && i < 5) document.getElementById(`otp-${i + 1}`)?.focus();
-  };
-  const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !value[i] && i > 0) {
-      document.getElementById(`otp-${i - 1}`)?.focus();
+
+    if (char && i < 5) {
+      inputRefs.current[i + 1]?.focus();
+    }
+
+    // Check if complete
+    const fullCode = next.join('');
+    if (fullCode.length === 6 && onComplete) {
+      onComplete(fullCode);
     }
   };
+
+  const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      if (!value[i] && i > 0) {
+        inputRefs.current[i - 1]?.focus();
+      }
+    } else if (e.key === 'ArrowLeft' && i > 0) {
+      e.preventDefault();
+      inputRefs.current[i - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && i < 5) {
+      e.preventDefault();
+      inputRefs.current[i + 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '');
+    if (!pastedData) return;
+
+    const digits = pastedData.slice(0, 6).split('');
+    const next = [...value];
+    for (let j = 0; j < 6; j++) {
+      next[j] = digits[j] || '';
+    }
+    onChange(next);
+
+    const targetFocus = Math.min(digits.length, 5);
+    inputRefs.current[targetFocus]?.focus();
+
+    if (digits.length >= 6 && onComplete) {
+      onComplete(digits.slice(0, 6).join(''));
+    }
+  };
+
   return (
     <div className="auth-otp-grid">
       {value.map((digit, i) => (
         <input
           key={i}
+          ref={el => { inputRefs.current[i] = el; }}
           id={`otp-${i}`}
           className={`auth-otp-input${digit ? ' filled' : ''}`}
           type="text"
           inputMode="numeric"
+          pattern="[0-9]*"
+          autoComplete="one-time-code"
           maxLength={1}
           value={digit}
+          disabled={disabled}
           onChange={e => handleChange(i, e.target.value)}
           onKeyDown={e => handleKeyDown(i, e)}
+          onPaste={handlePaste}
+          aria-label={`OTP Digit ${i + 1}`}
         />
       ))}
     </div>
@@ -150,26 +205,145 @@ const AuthLeft: React.FC = () => (
 
 // ─── Sign In Panel ────────────────────────────────────────────────────────────
 
-const SignInPanel: React.FC<{ onForgot: () => void; onRegister: () => void }> = ({ onForgot, onRegister }) => {
+const SignInPanel: React.FC<{ onForgot: () => void; onRegister: (phone?: string) => void }> = ({ onForgot, onRegister }) => {
   const navigate = useNavigate();
   const { dispatch } = useApp();
+  
+  // Modes
+  const [authMode, setAuthMode] = useState<'PHONE' | 'EMAIL'>('PHONE');
+  const [phoneStep, setPhoneStep] = useState<'PHONE' | 'OTP'>('PHONE');
+
+  // Phone State
+  const [phone, setPhone] = useState('+91 ');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otpTimer, setOtpTimer] = useState(60);
+  const [maskedPhone, setMaskedPhone] = useState('');
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Email State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+
+  // Common State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (phoneStep !== 'OTP' || authMode !== 'PHONE') return;
+    if (otpTimer <= 0) return;
+    const t = setInterval(() => setOtpTimer(v => v - 1), 1000);
+    return () => clearInterval(t);
+  }, [phoneStep, otpTimer, authMode]);
+
   const selectPreset = (preset: typeof ROLE_PRESETS[0]) => {
+    setAuthMode('EMAIL');
     setEmail(preset.email);
     setPassword(preset.pass);
     setError(null);
+    setSuccessMessage(null);
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const maskPhoneNumber = (raw: string) => {
+    const cleaned = raw.replace(/\D/g, '');
+    if (cleaned.length >= 4) {
+      return '+91 ******' + cleaned.slice(-4);
+    }
+    return raw;
+  };
+
+  const handlePhoneSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) { setError('Please enter both email and password.'); return; }
-    setLoading(true); setError(null);
+    const digitsOnly = phone.replace(/\D/g, '');
+    if (digitsOnly.length < 10) {
+      setError('Please enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const res = await authApi.sendOtp(phone.trim());
+      if (res.success) {
+        setMaskedPhone(maskPhoneNumber(phone.trim()));
+        setPhoneStep('OTP');
+        setOtpTimer(60);
+        setOtp(['', '', '', '', '', '']);
+      } else {
+        setError(res.message || 'Failed to send OTP. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhoneResendOtp = async () => {
+    if (otpTimer > 0 || loading) return;
+    setLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await authApi.sendOtp(phone.trim());
+      setOtpTimer(60);
+      setOtp(['', '', '', '', '', '']);
+      setSuccessMessage('A fresh OTP has been sent.');
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend OTP.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhoneVerifyOtp = async (e?: React.FormEvent, customCode?: string) => {
+    if (e) e.preventDefault();
+    const code = customCode || otp.join('');
+    if (code.length < 6) {
+      setError('Please enter the full 6-digit OTP code.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const res = await authApi.verifyOtp(phone.trim(), code);
+      if (res.success) {
+        if (res.requiresRegistration) {
+          setSuccessMessage('✓ Phone number verified!');
+          setTimeout(() => {
+            onRegister(phone.trim());
+          }, 800);
+        } else if (res.token && res.user) {
+          setSuccessMessage('✓ Verified! Signing you in…');
+          dispatch({
+            type: 'SET_USER_SESSION',
+            payload: { token: res.token, user: res.user }
+          });
+          setTimeout(() => {
+            navigate(res.user.role === 'MAINTENANCE_ENGINEER' ? '/machines' : res.user.role === 'MACHINE_OPERATOR' ? '/machines/1' : '/');
+          }, 600);
+        }
+      } else {
+        setError(res.message || 'Incorrect OTP. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Incorrect OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
     try {
       const res = await authApi.login(email, password);
       dispatch({
@@ -188,9 +362,7 @@ const SignInPanel: React.FC<{ onForgot: () => void; onRegister: () => void }> = 
         case 'MACHINE_OPERATOR':     navigate('/machines/1'); break;
         default:                     navigate('/');
       }
-    } catch {
-      // ── Offline / demo fallback ──────────────────────────────────────────
-      // Backend is unreachable. Try matching against built-in preset credentials.
+    } catch (err: any) {
       const preset = ROLE_PRESETS.find(p => p.email === email && p.pass === password);
       if (preset) {
         dispatch({
@@ -200,13 +372,13 @@ const SignInPanel: React.FC<{ onForgot: () => void; onRegister: () => void }> = 
             user: {
               id: Math.floor(1000 + Math.random() * 9000),
               employeeId: `EMP-DEMO`,
-              fullName: preset.label.replace(/^[^\s]+\s/, ''), // strip emoji
+              fullName: preset.label.replace(/^[^\s]+\s/, ''),
               email: preset.email,
               role: preset.role,
               department: 'Demo Department',
               designation: preset.label,
-              shift: 'MORNING',
-              factoryLocation: 'Plant A',
+              shift: 'Morning Shift (06:00 - 14:00)',
+              factoryLocation: 'SmartFactory Unit 1 · Chennai',
             },
           },
         });
@@ -216,7 +388,7 @@ const SignInPanel: React.FC<{ onForgot: () => void; onRegister: () => void }> = 
           default:                     navigate('/');
         }
       } else {
-        setError('Login failed. Check your credentials or use a demo preset above.');
+        setError(err.message || 'Login failed. Check your credentials.');
       }
     } finally {
       setLoading(false);
@@ -230,85 +402,176 @@ const SignInPanel: React.FC<{ onForgot: () => void; onRegister: () => void }> = 
         <p>Sign in to your SmartFactory dashboard</p>
       </div>
 
-      {/* Quick Role Presets */}
-      <div className="auth-role-presets">
-        <span className="auth-role-presets-label">⚡ Quick demo access — select a role:</span>
-        <div className="auth-role-presets-grid">
-          {ROLE_PRESETS.map(p => (
-            <button
-              key={p.role}
-              type="button"
-              className={`auth-role-chip${email === p.email ? ' active' : ''}`}
-              onClick={() => selectPreset(p)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+      <div className="auth-mode-toggle" style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem', background: 'rgba(255,255,255,0.03)', padding: '0.25rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <button type="button" className={`auth-role-chip ${authMode === 'PHONE' ? 'active' : ''}`} style={{ flex: 1, margin: 0, justifyContent: 'center' }} onClick={() => { setAuthMode('PHONE'); setError(null); setSuccessMessage(null); }}>📱 Mobile OTP</button>
+        <button type="button" className={`auth-role-chip ${authMode === 'EMAIL' ? 'active' : ''}`} style={{ flex: 1, margin: 0, justifyContent: 'center' }} onClick={() => { setAuthMode('EMAIL'); setError(null); setSuccessMessage(null); }}>✉️ Email &amp; Password</button>
       </div>
 
-      {error && <div className="auth-error">⚠️ {error}</div>}
-
-      <form className="auth-form" onSubmit={handleLogin}>
-        <div className="form-group">
-          <label className="form-label">Employee Email</label>
-          <input
-            className="form-input"
-            type="email"
-            placeholder="e.g. admin@factory.com"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">
-            Security Password
-          </label>
-          <div className="auth-pw-wrap">
-            <input
-              className="form-input"
-              type={showPw ? 'text' : 'password'}
-              placeholder="Enter your passkey"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-            />
-            <button
-              type="button"
-              className="auth-pw-toggle"
-              onClick={() => setShowPw(v => !v)}
-            >
-              {showPw ? '🙈 Hide' : '👁️ Show'}
-            </button>
+      {authMode === 'EMAIL' && (
+        <div className="auth-role-presets">
+          <span className="auth-role-presets-label">⚡ Quick demo access — select a role:</span>
+          <div className="auth-role-presets-grid">
+            {ROLE_PRESETS.map(p => (
+              <button
+                key={p.role}
+                type="button"
+                className={`auth-role-chip${email === p.email ? ' active' : ''}`}
+                onClick={() => selectPreset(p)}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
         </div>
+      )}
 
-        <div className="auth-options-row">
-          <label className="auth-remember">
-            <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
-            Remember me
-          </label>
-          <button type="button" className="auth-forgot" onClick={onForgot}>
-            Forgot Password?
-          </button>
+      {error && <div className="auth-error">⚠️ {error}</div>}
+      {successMessage && (
+        <div style={{ background: 'rgba(0,230,138,0.15)', border: '1px solid rgba(0,230,138,0.4)', color: '#00e68a', padding: '0.65rem 0.9rem', borderRadius: '8px', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: 700, textAlign: 'center' }}>
+          {successMessage}
         </div>
+      )}
 
-        <button className="auth-submit" type="submit" disabled={loading}>
-          {loading ? '🔐 Authenticating…' : '🚀 Sign In to Dashboard'}
-        </button>
-      </form>
+      {authMode === 'PHONE' && phoneStep === 'PHONE' && (
+        <form className="auth-form" onSubmit={handlePhoneSendOtp}>
+          <div className="form-group">
+            <label className="form-label">Mobile Number</label>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                className="form-input"
+                type="tel"
+                placeholder="+91 98765 43210"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.3rem', display: 'block' }}>
+              Enter your registered 10-digit mobile number for secure instant OTP login.
+            </span>
+          </div>
+          <button className="auth-submit" type="submit" disabled={loading}>
+            {loading ? '⏳ Sending OTP…' : '📱 Send OTP'}
+          </button>
+        </form>
+      )}
+
+      {authMode === 'PHONE' && phoneStep === 'OTP' && (
+        <form className="auth-form" onSubmit={handlePhoneVerifyOtp}>
+          <div className="auth-sms-notice" style={{ marginBottom: '1.25rem' }}>
+            <div className="auth-sms-icon">📱</div>
+            <div className="auth-sms-text">
+              <strong>OTP Dispatched</strong>
+              <span>6-digit code sent to <strong style={{ color: '#00d4ff' }}>{maskedPhone}</strong></span>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setPhoneStep('PHONE'); setError(null); setSuccessMessage(null); }}
+              style={{ background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)', color: '#00d4ff', fontSize: '0.75rem', fontWeight: 700, borderRadius: '6px', cursor: 'pointer', padding: '0.3rem 0.6rem' }}
+            >
+              Change
+            </button>
+          </div>
+
+          <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+            <p style={{ fontWeight: 700, color: '#fff', fontSize: '0.92rem', marginBottom: '0.1rem' }}>
+              Enter 6-Digit Verification Code
+            </p>
+          </div>
+
+          <OtpInputs
+            value={otp}
+            onChange={setOtp}
+            onComplete={(code) => handlePhoneVerifyOtp(undefined, code)}
+            disabled={loading}
+          />
+
+          <div className="auth-resend-row" style={{ marginTop: '1rem' }}>
+            <span>⏱️ Resend in: <strong style={{ color: '#00d4ff' }}>{otpTimer > 0 ? `${otpTimer}s` : 'Ready'}</strong></span>
+            <button
+              type="button"
+              className="auth-resend-btn"
+              disabled={otpTimer > 0 || loading}
+              onClick={handlePhoneResendOtp}
+              style={{
+                cursor: otpTimer === 0 && !loading ? 'pointer' : 'not-allowed',
+                color: otpTimer === 0 && !loading ? '#00e68a' : '#64748b',
+                fontWeight: 700
+              }}
+            >
+              {loading ? '⏳ Sending…' : '🔄 Resend OTP'}
+            </button>
+          </div>
+
+          <button className="auth-submit" type="submit" disabled={loading}>
+            {loading ? '⏳ Verifying…' : '✅ Verify & Continue'}
+          </button>
+        </form>
+      )}
+
+      {authMode === 'EMAIL' && (
+        <form className="auth-form" onSubmit={handleEmailLogin}>
+          <div className="form-group">
+            <label className="form-label">Employee Email</label>
+            <input
+              className="form-input"
+              type="email"
+              placeholder="e.g. admin@factory.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              Security Password
+            </label>
+            <div className="auth-pw-wrap">
+              <input
+                className="form-input"
+                type={showPw ? 'text' : 'password'}
+                placeholder="Enter your passkey"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="auth-pw-toggle"
+                onClick={() => setShowPw(v => !v)}
+              >
+                {showPw ? '🙈 Hide' : '👁️ Show'}
+              </button>
+            </div>
+          </div>
+
+          <div className="auth-options-row">
+            <label className="auth-remember">
+              <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} />
+              Remember me
+            </label>
+            <button type="button" className="auth-forgot" onClick={onForgot}>
+              Forgot Password?
+            </button>
+          </div>
+
+          <button className="auth-submit" type="submit" disabled={loading}>
+            {loading ? '🔐 Authenticating…' : '🚀 Sign In to Dashboard'}
+          </button>
+        </form>
+      )}
 
       <div className="auth-footer">
         New to SmartFactory?{' '}
-        <button className="auth-footer-link" onClick={onRegister}>
+        <button className="auth-footer-link" onClick={() => onRegister(authMode === 'PHONE' && phoneStep === 'PHONE' ? phone : undefined)}>
           Create an Account
         </button>
       </div>
 
       <div className="auth-security-footer">
-        🔒 Protected by Spring Security &amp; JWT · TLS 1.3
+        🔒 Protected by Spring Security &amp; Twilio Real-Time OTP · TLS 1.3
       </div>
     </div>
   );
@@ -318,7 +581,7 @@ const SignInPanel: React.FC<{ onForgot: () => void; onRegister: () => void }> = 
 
 type RegStep = 'DETAILS' | 'OTP';
 
-const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
+const RegisterPanel: React.FC<{ onSignIn: () => void; initialPhone?: string }> = ({ onSignIn, initialPhone }) => {
   const navigate = useNavigate();
   const { dispatch } = useApp();
   const [step, setStep] = useState<RegStep>('DETAILS');
@@ -326,7 +589,7 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
   // Form state
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('+91 ');
+  const [phone, setPhone] = useState(initialPhone || '+91 ');
   const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
@@ -336,6 +599,9 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
   const [designation, setDesignation] = useState('Operator');
   const [shift, setShift] = useState('Morning Shift (06:00 - 14:00)');
   const [factoryLocation, setFactoryLocation] = useState('SmartFactory Unit 1 · Chennai');
+
+  // If initialPhone was supplied from verified Step 1, consider it pre-verified
+  const [phonePreVerified] = useState<boolean>(!!initialPhone && initialPhone.length >= 10);
 
   // OTP state
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -354,88 +620,77 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
     return () => clearInterval(t);
   }, [step, otpTimer]);
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const maskPhoneNumber = (raw: string) => {
+    const cleaned = raw.replace(/\D/g, '');
+    if (cleaned.length >= 4) {
+      return '+91 ******' + cleaned.slice(-4);
+    }
+    return raw;
+  };
+
+  const handleSendOtpOrRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email || !phone || phone.trim() === '+91' || !password || !employeeId) {
       setError('Please fill in all mandatory fields.'); return;
     }
     if (password !== confirmPw) { setError('Passwords do not match.'); return; }
+    
+    // If already verified via Login OTP flow, proceed straight to registration
+    if (phonePreVerified) {
+      setLoading(true);
+      setError(null);
+      await completeRegistration();
+      setLoading(false);
+      return;
+    }
+
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`${API_BASE}/otp/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim() }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setMaskedPhone(data.phone || phone);
-        // ✅ Only advance to OTP step on success
+      const res = await authApi.sendOtp(phone.trim());
+      if (res.success) {
+        setMaskedPhone(maskPhoneNumber(phone.trim()));
         setStep('OTP');
         setOtpTimer(60);
         setOtp(['', '', '', '', '', '']);
       } else {
-        // Backend rejected (e.g. 30-second cooldown, invalid phone)
-        setError(data.message || 'Failed to send OTP. Please try again.');
+        setError(res.message || 'Failed to send OTP. Please try again.');
       }
-    } catch {
-      // Backend offline — generate a local dev OTP
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      (window as any).__devOtp = code;
-      setMaskedPhone(phone);
-      console.log(`[DEV] OTP: ${code}`);
-      // Still advance to OTP step in offline/dev mode
-      setStep('OTP');
-      setOtpTimer(60);
-      setOtp(['', '', '', '', '', '']);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleResend = async () => {
+    if (otpTimer > 0 || loading) return;
     setLoading(true);
+    setError(null);
     try {
-      await fetch(`${API_BASE}/otp/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim() }),
-      });
-    } catch {
-      const code = Math.floor(100000 + Math.random() * 900000).toString();
-      (window as any).__devOtp = code;
-      console.log(`[DEV] Resent OTP: ${code}`);
-    } finally {
-      setLoading(false);
+      await authApi.sendOtp(phone.trim());
       setOtpTimer(60);
       setOtp(['', '', '', '', '', '']);
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend OTP.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const code = otp.join('');
-    if (code.length < 6) { setError('Please enter the full 6-digit OTP.'); return; }
+  const handleVerify = async (e?: React.FormEvent, customCode?: string) => {
+    if (e) e.preventDefault();
+    const code = customCode || otp.join('');
+    if (code.length < 6) { setError('Please enter the full 6-digit OTP code.'); return; }
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`${API_BASE}/otp/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim(), code }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const res = await authApi.verifyOtp(phone.trim(), code);
+      if (res.success) {
         await completeRegistration();
       } else {
-        setError(data.message || 'Invalid OTP. Please try again.');
+        setError(res.message || 'Incorrect OTP. Please try again.');
       }
-    } catch {
-      const devOtp = (window as any).__devOtp;
-      if (code === devOtp || code === '123456') {
-        await completeRegistration();
-      } else {
-        setError('[Dev fallback] Invalid OTP. Use 123456 when backend is offline.');
-      }
+    } catch (err: any) {
+      setError(err.message || 'Incorrect OTP. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -443,13 +698,13 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
 
   const completeRegistration = async () => {
     try {
-      const res = await authApi.register({ fullName, email, phone, password, role, department, designation });
+      const res = await authApi.register({ fullName, email, phone, password, role, department, designation, factoryLocation });
       const user = {
-        id: res.userId || Date.now(),
+        id: res.userId || res.id || Date.now(),
         employeeId: employeeId || res.employeeId || `EMP-${Math.floor(1000 + Math.random() * 9000)}`,
         fullName, email, phone, role, department, designation, shift, factoryLocation,
       };
-      dispatch({ type: 'SET_USER_SESSION', payload: { token: res.token || `JWT_MOCK_${role}`, user } });
+      dispatch({ type: 'SET_USER_SESSION', payload: { token: res.token || `JWT_BEARER_${user.id}_${role}`, user } });
       dispatch({
         type: 'ADD_WORKER',
         payload: {
@@ -459,10 +714,8 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
           safetyTraining: true, performanceScore: 100,
         },
       });
-      // Mark that this device has successfully registered at least once.
-      // This ensures returning users always land on the Sign In tab.
       localStorage.setItem('fac_mon_has_registered', 'true');
-      navigate('/');
+      navigate(role === 'MAINTENANCE_ENGINEER' ? '/machines' : role === 'MACHINE_OPERATOR' ? '/machines/1' : '/');
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
     }
@@ -476,7 +729,7 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
           <div className="auth-step-dot active" />
         </div>
 
-        <button className="auth-back-btn" onClick={() => setStep('DETAILS')}>← Back to Details</button>
+        <button className="auth-back-btn" onClick={() => { setStep('DETAILS'); setError(null); }}>← Back to Details</button>
 
         <div className="auth-sms-notice">
           <div className="auth-sms-icon">📱</div>
@@ -484,7 +737,7 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
             <strong>OTP Sent via SMS</strong>
             <span>6-digit code sent to <strong style={{ color: '#fff' }}>{maskedPhone}</strong></span>
           </div>
-          <div className="auth-sms-badge">✓ SMS Sent</div>
+          <div className="auth-sms-badge">✓ Dispatched</div>
         </div>
 
         {error && <div className="auth-error">⚠️ {error}</div>}
@@ -500,19 +753,25 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
             </p>
           </div>
 
-          <OtpInputs value={otp} onChange={setOtp} />
+          <OtpInputs
+            value={otp}
+            onChange={setOtp}
+            onComplete={(code) => handleVerify(undefined, code)}
+            disabled={loading}
+          />
 
-          <div className="auth-dev-hint">
-            🧪 <strong>Dev Mode:</strong> Check backend console for OTP. Offline fallback: use <strong>123456</strong>. Real SMS via Twilio when <code>twilio.enabled=true</code>.
-          </div>
-
-          <div className="auth-resend-row">
-            <span>⏱️ Resend in: <strong style={{ color: '#00d4ff' }}>{otpTimer}s</strong></span>
+          <div className="auth-resend-row" style={{ marginTop: '1rem' }}>
+            <span>⏱️ Resend in: <strong style={{ color: '#00d4ff' }}>{otpTimer > 0 ? `${otpTimer}s` : 'Ready'}</strong></span>
             <button
               type="button"
               className="auth-resend-btn"
               disabled={otpTimer > 0 || loading}
               onClick={handleResend}
+              style={{
+                cursor: otpTimer === 0 && !loading ? 'pointer' : 'not-allowed',
+                color: otpTimer === 0 && !loading ? '#00e68a' : '#64748b',
+                fontWeight: 700
+              }}
             >
               {loading ? '⏳ Sending…' : '🔄 Resend OTP'}
             </button>
@@ -535,12 +794,12 @@ const RegisterPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) => {
 
       <div className="auth-card-header">
         <h2>👷 Create Account</h2>
-        <p>Step 1 of 2 · Worker account setup</p>
+        <p>{phonePreVerified ? 'Step 2: Worker account setup (Phone Verified)' : 'Step 1 of 2 · Worker account setup'}</p>
       </div>
 
       {error && <div className="auth-error">⚠️ {error}</div>}
 
-      <form className="auth-form" onSubmit={handleSendOtp}>
+      <form className="auth-form" onSubmit={handleSendOtpOrRegister}>
         <div className="form-group">
           <label className="form-label">Full Name *</label>
           <input className="form-input" placeholder="e.g. Ramesh Kumar" value={fullName} onChange={e => setFullName(e.target.value)} required />
@@ -960,26 +1219,27 @@ const ForgotPasswordPanel: React.FC<{ onSignIn: () => void }> = ({ onSignIn }) =
 
 // ─── Main LoginView ───────────────────────────────────────────────────────────
 
-type AuthTab = 'signin' | 'register' | 'forgot';
+type AuthView = 'SIGNIN' | 'REGISTER' | 'FORGOT';
 
 /**
  * Determine the initial tab to show:
  * - New visitor (no account ever created on this device) → 'register'
  * - Returning user (has a saved session OR has registered before) → 'signin'
  */
-function getInitialTab(): AuthTab {
+function getInitialView(): AuthView {
   const hasSession    = !!localStorage.getItem('fac_mon_current_user');
   const hasRegistered = !!localStorage.getItem('fac_mon_has_registered');
-  return hasSession || hasRegistered ? 'signin' : 'register';
+  return hasSession || hasRegistered ? 'SIGNIN' : 'REGISTER';
 }
 
 const LoginView: React.FC = () => {
-  const [tab, setTab] = useState<AuthTab>(getInitialTab);
+  const [view, setView] = useState<AuthView>(getInitialView);
+  const [initialPhone, setInitialPhone] = useState<string | undefined>(undefined);
 
   // Reset to top of card on tab switch
   const cardRef = useRef<HTMLDivElement>(null);
-  const switchTab = (t: AuthTab) => {
-    setTab(t);
+  const switchView = (v: AuthView) => {
+    setView(v);
     cardRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -993,42 +1253,42 @@ const LoginView: React.FC = () => {
           <div className="auth-tab-bar" role="tablist">
             <button
               role="tab"
-              aria-selected={tab === 'signin'}
-              className={`auth-tab${tab === 'signin' ? ' active' : ''}`}
-              onClick={() => switchTab('signin')}
+              aria-selected={view === 'SIGNIN'}
+              className={`auth-tab${view === 'SIGNIN' ? ' active' : ''}`}
+              onClick={() => switchView('SIGNIN')}
             >
               🔐 Sign In
             </button>
             <button
               role="tab"
-              aria-selected={tab === 'register'}
-              className={`auth-tab${tab === 'register' ? ' active' : ''}`}
-              onClick={() => switchTab('register')}
+              aria-selected={view === 'REGISTER'}
+              className={`auth-tab${view === 'REGISTER' ? ' active' : ''}`}
+              onClick={() => switchView('REGISTER')}
             >
               👷 Register
             </button>
             <button
               role="tab"
-              aria-selected={tab === 'forgot'}
-              className={`auth-tab${tab === 'forgot' ? ' active' : ''}`}
-              onClick={() => switchTab('forgot')}
+              aria-selected={view === 'FORGOT'}
+              className={`auth-tab${view === 'FORGOT' ? ' active' : ''}`}
+              onClick={() => switchView('FORGOT')}
             >
               🔑 Reset Pwd
             </button>
           </div>
 
           {/* Active panel */}
-          {tab === 'signin' && (
+          {view === 'SIGNIN' && (
             <SignInPanel
-              onForgot={() => switchTab('forgot')}
-              onRegister={() => switchTab('register')}
+              onForgot={() => switchView('FORGOT')}
+              onRegister={(phone) => { setInitialPhone(phone); switchView('REGISTER'); }}
             />
           )}
-          {tab === 'register' && (
-            <RegisterPanel onSignIn={() => switchTab('signin')} />
+          {view === 'REGISTER' && (
+            <RegisterPanel onSignIn={() => switchView('SIGNIN')} initialPhone={initialPhone} />
           )}
-          {tab === 'forgot' && (
-            <ForgotPasswordPanel onSignIn={() => switchTab('signin')} />
+          {view === 'FORGOT' && (
+            <ForgotPasswordPanel onSignIn={() => switchView('SIGNIN')} />
           )}
         </div>
       </div>

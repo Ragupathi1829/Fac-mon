@@ -79,7 +79,7 @@ import { DEFAULT_MACHINES, DEFAULT_ALERTS } from '../services/api';
 
 const STORAGE_KEY_USER = 'fac_mon_current_user';
 
-const getSavedUser = (): UserProfile | null => {
+export const getSavedUser = (): UserProfile | null => {
   const saved = localStorage.getItem(STORAGE_KEY_USER);
   if (saved) {
     try {

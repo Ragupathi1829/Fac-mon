@@ -12,10 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * OtpController — REST endpoints for OTP generation and verification.
- *
- * POST /api/otp/send    → Generate + send OTP to phone number via Twilio SMS
- * POST /api/otp/verify  → Verify submitted OTP code against stored value
+ * OtpController — Legacy / registration-specific REST endpoints for OTP.
+ * Maps to /api/otp.
  */
 @RestController
 @RequestMapping("/api/otp")
@@ -27,54 +25,53 @@ public class OtpController {
         this.otpService = otpService;
     }
 
-    /**
-     * Send OTP to the given phone number.
-     * In production (twilio.enabled=true): real SMS via Twilio.
-     * In dev mode (twilio.enabled=false): OTP logged to backend console.
-     */
     @PostMapping("/send")
     public ResponseEntity<Map<String, Object>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
         try {
-            otpService.generateAndSendOtp(request.phone(), OtpVerification.OtpType.MOBILE);
+            otpService.generateAndSendOtp(request.phone(), OtpVerification.OtpType.MOBILE, OtpVerification.OtpPurpose.REGISTER);
             return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "OTP sent to " + maskPhone(request.phone()),
-                "phone", maskPhone(request.phone())
+                "message", "OTP sent successfully",
+                "phone", maskPhone(request.phone()),
+                "expiresIn", 300
             ));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of(
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                 "success", false,
-                "message", "Failed to send OTP: " + e.getMessage()
+                "message", e.getMessage() != null ? e.getMessage() : "Failed to send OTP."
             ));
         }
     }
 
-    /**
-     * Verify OTP submitted by the user.
-     */
     @PostMapping("/verify")
     public ResponseEntity<Map<String, Object>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
-        boolean valid = otpService.verifyOtp(request.phone(), request.code(), OtpVerification.OtpType.MOBILE);
-
-        if (valid) {
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "OTP verified successfully. Worker registration can proceed."
-            ));
-        } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+        try {
+            boolean valid = otpService.verifyOtp(request.phone(), request.code(), OtpVerification.OtpType.MOBILE, OtpVerification.OtpPurpose.REGISTER);
+            if (valid) {
+                return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "OTP verified successfully."
+                ));
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "success", false,
+                    "message", "Incorrect OTP. Please try again."
+                ));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                 "success", false,
-                "message", "Invalid or expired OTP. Please request a new code."
+                "message", e.getMessage() != null ? e.getMessage() : "Verification failed."
             ));
         }
     }
 
-    /** Mask phone for response: +91 98765 XXXXX → +91 •••••43210 */
     private String maskPhone(String phone) {
         String cleaned = phone.replaceAll("\\s+", "");
-        if (cleaned.length() > 5) {
-            return cleaned.substring(0, cleaned.length() - 5) + "•••••";
+        if (cleaned.length() > 4) {
+            return "******" + cleaned.substring(cleaned.length() - 4);
         }
         return phone;
     }
 }
+

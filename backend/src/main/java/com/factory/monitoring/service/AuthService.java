@@ -26,24 +26,28 @@ public class AuthService {
     @PostConstruct
     public void initDefaultUsers() {
         if (userRepository.count() == 0) {
-            seedUser("EMP-1001", "Ragaav", "admin@factory.com", "admin123", UserRole.ADMIN, "Executive Board", "Chief Factory Admin");
-            seedUser("EMP-1002", "Vikram Manager", "manager@factory.com", "manager123", UserRole.FACTORY_MANAGER, "Production Ops", "Plant General Manager");
-            seedUser("EMP-1003", "Rajesh Engineer", "engineer@factory.com", "engineer123", UserRole.MAINTENANCE_ENGINEER, "Equipment Maintenance", "Senior Reliability Engineer");
-            seedUser("EMP-1004", "Anand Operator", "operator@factory.com", "operator123", UserRole.MACHINE_OPERATOR, "Extruder Sector A", "Senior Machine Specialist");
-            seedUser("EMP-1005", "Meera Inspector", "quality@factory.com", "quality123", UserRole.QUALITY_INSPECTOR, "Quality Assurance", "Chief Quality Auditor");
+            seedUser("EMP-1001", "Ragaav", "admin@factory.com", "+919876543210", "admin123", UserRole.ADMIN, "Executive Board", "Chief Factory Admin");
+            seedUser("EMP-1002", "Vikram Manager", "manager@factory.com", "+919876543211", "manager123", UserRole.FACTORY_MANAGER, "Production Ops", "Plant General Manager");
+            seedUser("EMP-1003", "Rajesh Engineer", "engineer@factory.com", "+919876543212", "engineer123", UserRole.MAINTENANCE_ENGINEER, "Equipment Maintenance", "Senior Reliability Engineer");
+            seedUser("EMP-1004", "Anand Operator", "operator@factory.com", "+919876543213", "operator123", UserRole.MACHINE_OPERATOR, "Extruder Sector A", "Senior Machine Specialist");
+            seedUser("EMP-1005", "Meera Inspector", "quality@factory.com", "+919876543214", "quality123", UserRole.QUALITY_INSPECTOR, "Quality Assurance", "Chief Quality Auditor");
         }
     }
 
-    private void seedUser(String empId, String name, String email, String password, UserRole role, String dept, String desig) {
+    private void seedUser(String empId, String name, String email, String phone, String password, UserRole role, String dept, String desig) {
         User u = User.builder()
                 .employeeId(empId)
                 .fullName(name)
                 .email(email)
+                .phone(phone)
                 .password(passwordEncoder.encode(password))
                 .role(role)
                 .department(dept)
                 .designation(desig)
                 .status("ACTIVE")
+                .emailVerified(true)
+                .mobileVerified(true)
+                .factoryLocation("SmartFactory Unit 1 · Chennai")
                 .createdAt(LocalDateTime.now())
                 .build();
         userRepository.save(u);
@@ -57,17 +61,25 @@ public class AuthService {
         String empId = request.getEmployeeId() != null && !request.getEmployeeId().isEmpty() 
                 ? request.getEmployeeId() 
                 : "EMP-" + (int)(Math.random() * 9000 + 1000);
+
+        String normalizedPhone = request.getPhone();
+        if (normalizedPhone != null && !normalizedPhone.trim().isEmpty()) {
+            String cleaned = normalizedPhone.replaceAll("[^0-9]", "");
+            if (cleaned.startsWith("91") && cleaned.length() == 12) cleaned = cleaned.substring(2);
+            else if (cleaned.startsWith("0") && cleaned.length() == 11) cleaned = cleaned.substring(1);
+            if (cleaned.length() == 10) normalizedPhone = "+91" + cleaned;
+        }
         
         User newUser = User.builder()
                 .employeeId(empId)
                 .fullName(request.getFullName())
                 .email(request.getEmail())
-                .phone(request.getPhone())
+                .phone(normalizedPhone)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole() != null ? request.getRole() : UserRole.MACHINE_OPERATOR)
                 .department(request.getDepartment())
                 .designation(request.getDesignation())
-                .factoryLocation(request.getFactoryLocation())
+                .factoryLocation(request.getFactoryLocation() != null ? request.getFactoryLocation() : "SmartFactory Unit 1 · Chennai")
                 .status("ACTIVE")
                 .emailVerified(true)
                 .mobileVerified(true)
@@ -89,7 +101,34 @@ public class AuthService {
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
 
-        // Generate JWT mock token (In production, JwtTokenProvider signs this)
+        return buildLoginResponse(user);
+    }
+
+    public LoginResponse loginByPhone(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            return null;
+        }
+        String cleaned = phone.replaceAll("[^0-9]", "");
+        if (cleaned.startsWith("91") && cleaned.length() == 12) cleaned = cleaned.substring(2);
+        else if (cleaned.startsWith("0") && cleaned.length() == 11) cleaned = cleaned.substring(1);
+        String normalizedPhone = (cleaned.length() == 10) ? "+91" + cleaned : "+" + cleaned;
+
+        Optional<User> userOpt = userRepository.findByPhone(normalizedPhone);
+        if (userOpt.isEmpty()) {
+            // Also check un-prefixed cleaned phone just in case older data stored 10 digits
+            userOpt = userRepository.findByPhone(cleaned);
+        }
+        if (userOpt.isEmpty()) {
+            return null; // Signals requiresRegistration
+        }
+        User user = userOpt.get();
+        user.setLastLogin(LocalDateTime.now());
+        userRepository.save(user);
+
+        return buildLoginResponse(user);
+    }
+
+    private LoginResponse buildLoginResponse(User user) {
         String token = "JWT_BEARER_" + UUID.randomUUID().toString() + "_" + user.getRole();
 
         return LoginResponse.builder()
@@ -133,19 +172,7 @@ public class AuthService {
                     .filter(u -> u.getLastLogin() != null)
                     .sorted((a, b) -> b.getLastLogin().compareTo(a.getLastLogin()))
                     .findFirst()
-                    .map(user -> LoginResponse.builder()
-                            .token(token)
-                            .id(user.getId())
-                            .employeeId(user.getEmployeeId())
-                            .fullName(user.getFullName())
-                            .email(user.getEmail())
-                            .role(user.getRole())
-                            .department(user.getDepartment())
-                            .designation(user.getDesignation())
-                            .shift("Morning Shift (06:00 - 14:00)")
-                            .factoryLocation("SmartFactory Unit 1 · Chennai")
-                            .lastLogin(user.getLastLogin())
-                            .build())
+                    .map(this::buildLoginResponse)
                     .orElse(null);
         } catch (Exception e) {
             return null;

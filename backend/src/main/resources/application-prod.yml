@@ -1,37 +1,8 @@
-server:
-  port: ${PORT:8080}
+# Production Profile
+# Active when spring.profiles.active=prod
+# Requires real SMS credentials via environment variables.
 
-spring:
-  datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/factory_monitoring_prod?useSSL=true&serverTimezone=UTC}
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
-      connection-timeout: 30000
-      idle-timeout: 600000
-
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
-        format_sql: false
-
-logging:
-  level:
-    root: WARN
-    com.factory.monitoring: INFO
-    org.springframework.web.socket: WARN
-    org.hibernate.SQL: ERROR
-
-cors:
-  allowed-origins: ${ALLOWED_ORIGINS:https://your-production-domain.com}
-
-telemetry:
-  simulator:
-    enabled: false # Never auto-run in prod unless forced
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID}
+  auth-token: ${TWILIO_AUTH_TOKEN}
+  phone-number: ${TWILIO_PHONE_NUMBER}
