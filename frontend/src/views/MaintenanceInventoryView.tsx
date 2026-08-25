@@ -4,14 +4,22 @@ import { useApp } from '../context/AppContext';
 
 const MaintenanceInventoryView: React.FC = () => {
   const { state, dispatch } = useApp();
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    machineId: number;
+    scheduledDate: string;
+    engineerName: string;
+    notes: string;
+    type: 'PREVENTIVE' | 'CORRECTIVE' | 'AI_RECOMMENDED';
+  }>({
     machineId: 1,
     scheduledDate: '',
     engineerName: '',
     notes: '',
-    type: 'PREVENTIVE' as const,
+    type: 'PREVENTIVE',
   });
   const [orderFeedback, setOrderFeedback] = useState<Record<number, string>>({});
+  const [activeFilter, setActiveFilter] = useState<'ALL' | 'PREVENTIVE' | 'CORRECTIVE' | 'AI_RECOMMENDED'>('ALL');
+  const [inventorySearch, setInventorySearch] = useState('');
 
   const handleScheduleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +35,7 @@ const MaintenanceInventoryView: React.FC = () => {
         machineName: mach ? mach.name : 'Unknown Machine',
         scheduledDate: form.scheduledDate,
         engineerName: form.engineerName,
-        cost: form.type === 'PREVENTIVE' ? 250 : 600,
+        cost: form.type === 'PREVENTIVE' ? 250 : form.type === 'AI_RECOMMENDED' ? 400 : 600,
         sparePartsUsed: [],
         notes: form.notes,
         type: form.type,
@@ -47,72 +55,127 @@ const MaintenanceInventoryView: React.FC = () => {
   const handleRestock = (itemId: number, currentStock: number) => {
     dispatch({
       type: 'UPDATE_INVENTORY',
-      payload: { id: itemId, stock: currentStock + 5 },
+      payload: { id: itemId, stock: currentStock + 10 },
     });
-    setOrderFeedback(prev => ({ ...prev, [itemId]: 'Order Placed (+$5pcs)' }));
+    setOrderFeedback(prev => ({ ...prev, [itemId]: '✅ +10 Stock Ingested!' }));
     setTimeout(() => {
       setOrderFeedback(prev => {
         const updated = { ...prev };
         delete updated[itemId];
         return updated;
       });
-    }, 2000);
+    }, 2500);
   };
+
+  // Filtered maintenance list
+  const filteredMaintenance = state.maintenance.filter(item => {
+    if (activeFilter === 'ALL') return true;
+    return item.type === activeFilter;
+  });
+
+  // Filtered inventory list
+  const filteredInventory = state.inventory.filter(item => {
+    if (!inventorySearch.trim()) return true;
+    return item.partName.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+           item.partNumber.toLowerCase().includes(inventorySearch.toLowerCase());
+  });
+
+  const lowStockCount = state.inventory.filter(i => i.stockLevel < i.minRequired).length;
 
   return (
     <div className="app-root">
       <Navbar />
       <div className="dashboard-container">
-        <header className="dashboard-header">
-          <h1>🛠️ Maintenance & Inventory</h1>
-          <p className="system-time">PULSE · Resources & Workorders</p>
+        {/* Header Strip */}
+        <header className="maintenance-header-strip">
+          <div>
+            <div className="maint-title-row">
+              <span className="maint-badge-pulse">🛠️ INDUSTRY 4.0 RESOURCE HUB</span>
+              {lowStockCount > 0 && (
+                <span className="maint-badge-warning">
+                  ⚠️ {lowStockCount} Spare Part(s) Below Threshold
+                </span>
+              )}
+            </div>
+            <h1 className="maint-main-title">Maintenance & Spare Parts Inventory</h1>
+            <p className="system-time">Real-time work order orchestration & predictive spare stock allocation</p>
+          </div>
         </header>
 
-        <main className="dashboard-main" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '1.75rem' }}>
-          
-          {/* Main Panel: Inventory & Maintenance Tables */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+        <main className="maintenance-layout-grid">
+          {/* Main Left: Inventory & Work Orders */}
+          <div className="maintenance-left-column">
             
-            {/* Inventory Card */}
-            <div className="chart-card">
-              <h3 style={{ marginBottom: '1rem' }}>📦 Spare Parts Inventory</h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            {/* ── 1. Spare Parts Inventory Card ── */}
+            <div className="maint-card-panel">
+              <div className="maint-card-header">
+                <div>
+                  <h3 className="maint-card-title">📦 Smart Spare Parts Inventory</h3>
+                  <p className="maint-card-sub">Automated procurement triggers & critical component tracking</p>
+                </div>
+                <div className="inventory-search-wrap">
+                  <input 
+                    type="text" 
+                    placeholder="Search parts or SKU..." 
+                    className="inventory-search-input"
+                    value={inventorySearch}
+                    onChange={e => setInventorySearch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="maint-table-wrapper">
+                <table className="maint-custom-table">
                   <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
-                      <th style={{ padding: '0.75rem' }}>Part Name</th>
-                      <th style={{ padding: '0.75rem' }}>Part No.</th>
-                      <th style={{ padding: '0.75rem' }}>Stock Level</th>
-                      <th style={{ padding: '0.75rem' }}>Min Req.</th>
-                      <th style={{ padding: '0.75rem' }}>Status</th>
-                      <th style={{ padding: '0.75rem' }}>Action</th>
+                    <tr>
+                      <th>Part Details</th>
+                      <th>Part SKU</th>
+                      <th>Current Level</th>
+                      <th>Health Index</th>
+                      <th>Status</th>
+                      <th style={{ textAlign: 'right' }}>Procurement Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {state.inventory.map(item => {
+                    {filteredInventory.map(item => {
                       const lowStock = item.stockLevel < item.minRequired;
+                      const stockPct = Math.min(100, Math.round((item.stockLevel / (item.minRequired * 2)) * 100));
                       return (
-                        <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                          <td style={{ padding: '0.75rem', fontWeight: 600 }}>{item.partName}</td>
-                          <td style={{ padding: '0.75rem', color: 'var(--text-muted)', fontFamily: 'Inter, monospace' }}>{item.partNumber}</td>
-                          <td style={{ padding: '0.75rem', fontWeight: 700 }}>{item.stockLevel} {item.unit}</td>
-                          <td style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>{item.minRequired}</td>
-                          <td style={{ padding: '0.75rem' }}>
-                            <span style={{
-                              color: lowStock ? 'var(--accent-rose)' : 'var(--accent-emerald)',
-                              background: lowStock ? 'rgba(255,59,106,0.1)' : 'rgba(0,230,138,0.1)',
-                              padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700
-                            }}>
-                              {lowStock ? '⚠️ Low Stock' : '✅ Healthy'}
+                        <tr key={item.id} className={lowStock ? 'row-warning' : ''}>
+                          <td>
+                            <div className="part-name-cell">
+                              <span className="part-icon">🔩</span>
+                              <span className="part-title">{item.partName}</span>
+                            </div>
+                          </td>
+                          <td className="font-mono text-muted">{item.partNumber}</td>
+                          <td>
+                            <span className="stock-number-pill">
+                              <strong>{item.stockLevel}</strong> / {item.minRequired} {item.unit}
                             </span>
                           </td>
-                          <td style={{ padding: '0.75rem' }}>
+                          <td style={{ minWidth: '130px' }}>
+                            <div className="stock-meter-wrap">
+                              <div className="stock-meter-track">
+                                <div 
+                                  className={`stock-meter-fill ${lowStock ? 'fill-low' : 'fill-good'}`}
+                                  style={{ width: `${stockPct}%` }}
+                                />
+                              </div>
+                              <span className="stock-meter-text">{stockPct}%</span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className={`stock-status-tag ${lowStock ? 'tag-low' : 'tag-good'}`}>
+                              {lowStock ? '⚠️ Low Stock' : '✅ Optimal'}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
                             <button 
-                              className="btn-outline-action"
-                              style={{ padding: '0.2rem 0.5rem', fontSize: '0.68rem' }}
+                              className={`btn-stock-action ${orderFeedback[item.id] ? 'ordered' : ''}`}
                               onClick={() => handleRestock(item.id, item.stockLevel)}
                             >
-                              {orderFeedback[item.id] || 'Order Stock'}
+                              {orderFeedback[item.id] || '⚡ Order +10 Units'}
                             </button>
                           </td>
                         </tr>
@@ -123,37 +186,79 @@ const MaintenanceInventoryView: React.FC = () => {
               </div>
             </div>
 
-            {/* Maintenance Log Card */}
-            <div className="chart-card">
-              <h3 style={{ marginBottom: '1rem' }}>📅 Scheduled Work Orders</h3>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+            {/* ── 2. Work Orders Card ── */}
+            <div className="maint-card-panel">
+              <div className="maint-card-header">
+                <div>
+                  <h3 className="maint-card-title">📋 Scheduled Maintenance Orders</h3>
+                  <p className="maint-card-sub">Active tickets, assigned field engineers, and completion stages</p>
+                </div>
+                
+                {/* Filter Tabs */}
+                <div className="workorder-filter-tabs">
+                  <button 
+                    className={`wo-filter-btn ${activeFilter === 'ALL' ? 'active' : ''}`}
+                    onClick={() => setActiveFilter('ALL')}
+                  >
+                    All ({state.maintenance.length})
+                  </button>
+                  <button 
+                    className={`wo-filter-btn ${activeFilter === 'PREVENTIVE' ? 'active' : ''}`}
+                    onClick={() => setActiveFilter('PREVENTIVE')}
+                  >
+                    Preventive
+                  </button>
+                  <button 
+                    className={`wo-filter-btn ${activeFilter === 'CORRECTIVE' ? 'active' : ''}`}
+                    onClick={() => setActiveFilter('CORRECTIVE')}
+                  >
+                    Corrective
+                  </button>
+                  <button 
+                    className={`wo-filter-btn ${activeFilter === 'AI_RECOMMENDED' ? 'active' : ''}`}
+                    onClick={() => setActiveFilter('AI_RECOMMENDED')}
+                  >
+                    AI Suggested
+                  </button>
+                </div>
+              </div>
+
+              <div className="maint-table-wrapper">
+                <table className="maint-custom-table">
                   <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
-                      <th style={{ padding: '0.75rem' }}>Machine</th>
-                      <th style={{ padding: '0.75rem' }}>Date</th>
-                      <th style={{ padding: '0.75rem' }}>Engineer</th>
-                      <th style={{ padding: '0.75rem' }}>Notes</th>
-                      <th style={{ padding: '0.75rem' }}>Type</th>
-                      <th style={{ padding: '0.75rem' }}>Status</th>
+                    <tr>
+                      <th>Machine Unit</th>
+                      <th>Scheduled Date</th>
+                      <th>Lead Engineer</th>
+                      <th>Diagnostic Notes</th>
+                      <th>Type</th>
+                      <th>Est. Cost</th>
+                      <th>Ticket Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {state.maintenance.map(job => (
-                      <tr key={job.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        <td style={{ padding: '0.75rem', fontWeight: 600 }}>{job.machineName}</td>
-                        <td style={{ padding: '0.75rem', color: 'var(--text-muted)' }}>{job.scheduledDate}</td>
-                        <td style={{ padding: '0.75rem' }}>{job.engineerName}</td>
-                        <td style={{ padding: '0.75rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{job.notes}</td>
-                        <td style={{ padding: '0.75rem' }}>
-                          <span style={{ fontSize: '0.68rem', fontWeight: 700, opacity: 0.85 }}>{job.type}</span>
+                    {filteredMaintenance.map(job => (
+                      <tr key={job.id}>
+                        <td>
+                          <div className="machine-code-cell">
+                            <span className="code-badge">⚙️</span>
+                            <span className="code-title">{job.machineName}</span>
+                          </div>
                         </td>
-                        <td style={{ padding: '0.75rem' }}>
-                          <span style={{
-                            color: job.status === 'COMPLETED' ? 'var(--accent-emerald)' : 'var(--accent-cyan)',
-                            background: job.status === 'COMPLETED' ? 'rgba(0,230,138,0.1)' : 'rgba(0,212,255,0.1)',
-                            padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700
-                          }}>
+                        <td className="font-mono text-muted">{job.scheduledDate}</td>
+                        <td>
+                          <span className="engineer-pill">👤 {job.engineerName}</span>
+                        </td>
+                        <td className="notes-cell" title={job.notes}>{job.notes || 'Routine checkup'}</td>
+                        <td>
+                          <span className={`work-type-pill type-${job.type.toLowerCase()}`}>
+                            {job.type.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="font-mono text-cyan">₹{(job.cost * 83).toLocaleString()}</td>
+                        <td>
+                          <span className={`job-status-pill status-${job.status.toLowerCase()}`}>
+                            <span className="status-dot" />
                             {job.status}
                           </span>
                         </td>
@@ -166,72 +271,98 @@ const MaintenanceInventoryView: React.FC = () => {
 
           </div>
 
-          {/* Right Panel: Schedule Form */}
-          <aside className="alert-center">
-            <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>📅 New Work Order</h2>
-            <form className="modal-form" onSubmit={handleScheduleSubmit}>
-              <div className="form-group">
-                <label className="form-label">Select Machine</label>
-                <select
-                  className="form-select"
-                  value={form.machineId}
-                  onChange={e => setForm({ ...form, machineId: Number(e.target.value) })}
-                >
-                  {state.machines.map(m => (
-                    <option key={m.id} value={m.id}>{m.name} ({m.machineCode})</option>
-                  ))}
-                </select>
+          {/* Right Column: Work Order Dispatch Form */}
+          <aside className="maint-right-sidebar">
+            <div className="maint-dispatch-card">
+              <div className="dispatch-header">
+                <div className="dispatch-icon-wrap">⚡</div>
+                <div>
+                  <h3 className="dispatch-title">Dispatch Work Order</h3>
+                  <p className="dispatch-sub">Assign priority tickets to maintenance crew</p>
+                </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Scheduled Date</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={form.scheduledDate}
-                  onChange={e => setForm({ ...form, scheduledDate: e.target.value })}
-                />
-              </div>
+              <form className="dispatch-form" onSubmit={handleScheduleSubmit}>
+                <div className="form-group-modern">
+                  <label className="form-label-modern">Target Machine</label>
+                  <select
+                    className="form-select-modern"
+                    value={form.machineId}
+                    onChange={e => setForm({ ...form, machineId: Number(e.target.value) })}
+                  >
+                    {state.machines.map(m => (
+                      <option key={m.id} value={m.id}>{m.name} ({m.machineCode}) - Status: {m.status}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <div className="form-group">
-                <label className="form-label">Assign Engineer</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g., Rajesh Sharma"
-                  value={form.engineerName}
-                  onChange={e => setForm({ ...form, engineerName: e.target.value })}
-                />
-              </div>
+                <div className="form-group-modern">
+                  <label className="form-label-modern">Scheduled Date</label>
+                  <input
+                    type="date"
+                    className="form-input-modern"
+                    value={form.scheduledDate}
+                    onChange={e => setForm({ ...form, scheduledDate: e.target.value })}
+                    required
+                  />
+                </div>
 
-              <div className="form-group">
-                <label className="form-label">Work Type</label>
-                <select
-                  className="form-select"
-                  value={form.type}
-                  onChange={e => setForm({ ...form, type: e.target.value as any })}
-                >
-                  <option value="PREVENTIVE">Preventive Maintenance</option>
-                  <option value="CORRECTIVE">Corrective Action</option>
-                  <option value="AI_RECOMMENDED">AI Recommendation Fix</option>
-                </select>
-              </div>
+                <div className="form-group-modern">
+                  <label className="form-label-modern">Lead Engineer</label>
+                  <input
+                    type="text"
+                    className="form-input-modern"
+                    placeholder="e.g., Rajesh Sharma (Sr. Tech)"
+                    value={form.engineerName}
+                    onChange={e => setForm({ ...form, engineerName: e.target.value })}
+                    required
+                  />
+                </div>
 
-              <div className="form-group">
-                <label className="form-label">Instructions / Notes</label>
-                <textarea
-                  className="form-input"
-                  rows={3}
-                  placeholder="Details of the job..."
-                  value={form.notes}
-                  onChange={e => setForm({ ...form, notes: e.target.value })}
-                />
-              </div>
+                <div className="form-group-modern">
+                  <label className="form-label-modern">Work Order Classification</label>
+                  <select
+                    className="form-select-modern"
+                    value={form.type}
+                    onChange={e => setForm({ ...form, type: e.target.value as any })}
+                  >
+                    <option value="PREVENTIVE">🛡️ Preventive Maintenance</option>
+                    <option value="CORRECTIVE">🔧 Corrective Breakdown Action</option>
+                    <option value="AI_RECOMMENDED">🤖 AI Telemetry Prescribed Fix</option>
+                  </select>
+                </div>
 
-              <button className="btn-submit" type="submit">
-                Create Work Order
-              </button>
-            </form>
+                <div className="form-group-modern">
+                  <label className="form-label-modern">Technical Notes & Directive</label>
+                  <textarea
+                    className="form-textarea-modern"
+                    rows={3}
+                    placeholder="Provide diagnostic directives or parts replacement checklist..."
+                    value={form.notes}
+                    onChange={e => setForm({ ...form, notes: e.target.value })}
+                  />
+                </div>
+
+                <div className="dispatch-summary-box">
+                  <div className="summary-row">
+                    <span>Estimated Labor & Spares:</span>
+                    <strong className="text-cyan">
+                      {form.type === 'PREVENTIVE' ? '₹20,750 ($250)' : form.type === 'AI_RECOMMENDED' ? '₹33,200 ($400)' : '₹49,800 ($600)'}
+                    </strong>
+                  </div>
+                  <div className="summary-row">
+                    <span>Priority Level:</span>
+                    <strong style={{ color: form.type === 'CORRECTIVE' ? '#ff3b6a' : '#00e68a' }}>
+                      {form.type === 'CORRECTIVE' ? 'HIGH PRIORITY' : 'ROUTINE'}
+                    </strong>
+                  </div>
+                </div>
+
+                <button className="btn-dispatch-submit" type="submit">
+                  <span>🚀 Dispatch Work Order</span>
+                </button>
+              </form>
+            </div>
           </aside>
         </main>
       </div>
@@ -240,3 +371,4 @@ const MaintenanceInventoryView: React.FC = () => {
 };
 
 export default MaintenanceInventoryView;
+
