@@ -1,3 +1,5 @@
+
+
 package com.factory.monitoring.service.impl;
 
 import com.factory.monitoring.domain.Machine;
